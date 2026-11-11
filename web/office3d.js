@@ -219,6 +219,7 @@ export class Office3D extends window.Office {
   // ------------------------------------------------------------ build room
 
   build() {
+    this.tvScreen = this.movieScreen = this.movieLight = this.bag = null;
     if (this.plan.scene) return this.buildScene();
     const plan = this.plan;
     if (this.room) { this.scene.remove(this.room); }
@@ -238,12 +239,39 @@ export class Office3D extends window.Office {
       m.receiveShadow = true;
       this.room.add(m);
     };
+    // Natural oak: each plank its own tone, with fine grain and offset joints.
     const planks = this.patternTexture((c, s) => {
-      c.fillStyle = dark ? '#4a3f35' : '#e3cfb0'; c.fillRect(0, 0, s, s);
-      c.strokeStyle = dark ? 'rgba(0,0,0,.25)' : 'rgba(120,90,50,.18)'; c.lineWidth = 2;
-      for (let i = 0; i <= 4; i++) { c.beginPath(); c.moveTo(0, i * s / 4); c.lineTo(s, i * s / 4); c.stroke(); }
-      for (let i = 0; i < 4; i++) { const x = ((i * 37) % 4 + 0.5) * s / 4; c.beginPath(); c.moveTo(x, i * s / 4); c.lineTo(x, (i + 1) * s / 4); c.stroke(); }
-    });
+      const tones = dark ? ['#a8865f', '#b08d64', '#9f7f59', '#ab8a62'] : ['#dcbd90', '#e3c599', '#d4b587', '#dfc194'];
+      const rows = 4, ph = s / rows;
+      let seed = 7;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      for (let r = 0; r < rows; r++) {
+        const joint = ((r * 37) % 4 + 0.5) * s / 4;
+        for (const [x0, x1] of [[0, joint], [joint, s]]) {
+          c.fillStyle = tones[(r * 2 + (x0 ? 1 : 0)) % tones.length];
+          c.fillRect(x0, r * ph, x1 - x0, ph);
+        }
+        // grain: thin wavy lines along the plank
+        for (let g = 0; g < 7; g++) {
+          const gy = r * ph + 3 + rnd() * (ph - 6);
+          c.strokeStyle = dark ? `rgba(70,45,20,${0.12 + rnd() * 0.14})` : `rgba(140,95,45,${0.1 + rnd() * 0.14})`;
+          c.lineWidth = 0.6 + rnd() * 0.8;
+          c.beginPath();
+          const amp = 0.6 + rnd() * 1.6, f = 0.02 + rnd() * 0.03, ph0 = rnd() * 6;
+          for (let x = 0; x <= s; x += 4) { const yy = gy + Math.sin(x * f + ph0) * amp; x ? c.lineTo(x, yy) : c.moveTo(x, yy); }
+          c.stroke();
+        }
+        // a knot now and then
+        if (rnd() < 0.5) {
+          const kx = rnd() * s, ky = r * ph + ph / 2;
+          c.fillStyle = dark ? 'rgba(70,45,20,.35)' : 'rgba(130,85,40,.3)';
+          c.beginPath(); c.ellipse(kx, ky, 3.5, 1.6, 0, 0, Math.PI * 2); c.fill();
+        }
+        c.strokeStyle = dark ? 'rgba(50,30,12,.45)' : 'rgba(110,75,35,.3)'; c.lineWidth = 1.5;
+        c.beginPath(); c.moveTo(0, r * ph); c.lineTo(s, r * ph); c.stroke();
+        c.beginPath(); c.moveTo(joint, r * ph); c.lineTo(joint, (r + 1) * ph); c.stroke();
+      }
+    }, 256);
     const tiles = this.patternTexture((c, s) => {
       c.fillStyle = dark ? '#3d4044' : '#f4f4f1'; c.fillRect(0, 0, s, s);
       c.fillStyle = dark ? '#35383c' : '#e3e4e0'; c.fillRect(0, 0, s / 2, s / 2); c.fillRect(s / 2, s / 2, s / 2, s / 2);
@@ -255,6 +283,28 @@ export class Office3D extends window.Office {
     floor(OW, MR, W - OW, PY - MR, 0xffffff, tiles);
     const planks2 = planks.clone(); planks2.needsUpdate = true; planks2.repeat.set((W - OW) / 2, (D - PY) / 2);
     floor(OW, PY, W - OW, D - PY, 0xffffff, planks2);
+    const rm = plan.rooms;
+    if (rm) {
+      // rubber gym floor, carpet in the Switch and movie rooms (just above the planks)
+      const over = (x, y, w, d, color, tex) => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ color, roughness: 1, map: tex || null }));
+        m.rotation.x = -Math.PI / 2;
+        m.position.set(x + w / 2, 0.003, y + d / 2);
+        m.receiveShadow = true;
+        this.room.add(m);
+      };
+      const rubber = this.patternTexture((c, s) => {
+        c.fillStyle = dark ? '#2e3236' : '#6b727a'; c.fillRect(0, 0, s, s);
+        c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 2; c.strokeRect(1, 1, s - 2, s - 2);
+      });
+      rubber.repeat.set(rm.LW, rm.GD);
+      over(0, 0, rm.LW, rm.GD, 0xffffff, rubber);
+      over(0, rm.SY, rm.LW, rm.CY - rm.SY, dark ? 0x3c3550 : 0xcfc6e0);
+      over(0, rm.MY, rm.LW, D - rm.MY, dark ? 0x3e2328 : 0x8a4a52);
+      const gym = this.textPlane('GYM', dark ? '#3a3d42' : '#6b727a', 1.0, 0.3);
+      gym.position.set(5.7, 2.15, 0.005);
+      this.room.add(gym);
+    }
     const pp = plan.pp;
     const mat = new THREE.Mesh(new THREE.PlaneGeometry(pp.x1 - pp.x0 + 1.2, 2.7), new THREE.MeshStandardMaterial({ color: dark ? 0x2f4a3a : 0xbfd8c4, roughness: 1 }));
     mat.rotation.x = -Math.PI / 2; mat.position.set((pp.x0 + pp.x1) / 2, 0.005, pp.y - 0.05); mat.receiveShadow = true;
@@ -306,10 +356,10 @@ export class Office3D extends window.Office {
     this.fitCamera3D(true);
   }
 
-  patternTexture(paint) {
+  patternTexture(paint, size = 128) {
     const cv = document.createElement('canvas');
-    cv.width = cv.height = 128;
-    paint(cv.getContext('2d'), 128);
+    cv.width = cv.height = size;
+    paint(cv.getContext('2d'), size);
     const t = new THREE.CanvasTexture(cv);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.colorSpace = THREE.SRGBColorSpace;
@@ -545,6 +595,102 @@ export class Office3D extends window.Office {
       case 'rug':
         this.place('rugRectangle', p.x, p.y, p.w, p.d, { y0: 0.004 });
         break;
+
+      // ---- gym
+      case 'treadmill': {
+        const { x, y } = p;
+        this.boxMesh(x, y + 0.15, 0, 0.8, 1.55, 0.06, 0x4a4e54, { rough: 0.6 });
+        this.boxMesh(x + 0.1, y + 0.2, 0.06, 0.6, 1.45, 0.012, 0x1c1d20, { rough: 0.9 });
+        for (const px of [x + 0.02, x + 0.72]) this.boxMesh(px, y + 0.12, 0, 0.06, 0.06, 1.05, 0x3a3d42, { metal: 0.4, rough: 0.4 });
+        this.boxMesh(x, y, 1.0, 0.8, 0.3, 0.12, 0x4a4e54, { rough: 0.5 });
+        for (const px of [x + 0.02, x + 0.72]) this.boxMesh(px, y + 0.3, 0.95, 0.06, 0.5, 0.04, 0x8d939a, { metal: 0.6, rough: 0.3 });
+        this.boxMesh(x + 0.2, y + 0.3, 1.02, 0.4, 0.008, 0.08, 0x000000, { emissive: 0x3fd38a, ei: 0.9, shadow: false });
+        break;
+      }
+      case 'punchBag': {
+        const g = new THREE.Group();
+        g.position.set(p.x, 2.35, p.y);
+        const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.7, 6), new THREE.MeshStandardMaterial({ color: 0x8d939a, metalness: 0.7, roughness: 0.3 }));
+        chain.position.y = -0.35;
+        const bag = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.05, 18), new THREE.MeshStandardMaterial({ color: 0xc8402f, roughness: 0.55 }));
+        bag.position.y = -0.7 - 0.525;
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.205, 0.205, 0.06, 18), new THREE.MeshStandardMaterial({ color: 0x222226, roughness: 0.6 }));
+        cap.position.y = -0.7 - 0.03;
+        for (const m of [chain, bag, cap]) { m.castShadow = true; g.add(m); }
+        this.room.add(g);
+        this.boxMesh(p.x - 0.15, p.y - 0.03, 2.33, 0.3, 0.06, 0.05, 0x3a3d42, { metal: 0.5 });
+        this.bag = g;
+        break;
+      }
+      case 'mirror':
+        this.boxMesh(0, p.y - 0.04, 0.21, 0.04, p.d + 0.08, 1.73, dark ? 0x2b2926 : 0xcfc5b3);
+        this.boxMesh(0.04, p.y, 0.25, 0.01, p.d, 1.65, dark ? 0x7d93a8 : 0xd8e6f0, { metal: 0.3, rough: 0.08, emissive: dark ? 0x1a2430 : 0x2a3a48, ei: 0.4, shadow: false });
+        break;
+      case 'dumbbells': {
+        this.boxMesh(p.x, p.y, 0, p.w, p.d, 0.55, 0x4a4e54, { rough: 0.6 });
+        const cols = [0xc0392b, 0x2f6fb0, 0x5f9a4c, 0xc9a24c, 0x2a2a2e];
+        const n = 5;
+        for (let k = 0; k < n; k++) {
+          const cy = p.y + 0.2 + k * (p.d - 0.4) / (n - 1);
+          const mat = new THREE.MeshStandardMaterial({ color: cols[k], roughness: 0.5 });
+          for (const dx of [0.1, 0.35]) {
+            const end = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.07, 8), mat);
+            end.rotation.z = Math.PI / 2; end.position.set(p.x + dx, 0.62, cy); end.castShadow = true;
+            this.room.add(end);
+          }
+          const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.25, 6), new THREE.MeshStandardMaterial({ color: 0x8d939a, metalness: 0.7, roughness: 0.3 }));
+          bar.rotation.z = Math.PI / 2; bar.position.set(p.x + 0.225, 0.62, cy);
+          this.room.add(bar);
+        }
+        break;
+      }
+      case 'bench':
+        for (const ly of [0.2, 1.0]) this.boxMesh(p.x + 0.16, p.y + ly, 0, 0.12, 0.12, 0.35, 0x3a3d42, { metal: 0.4, rough: 0.4 });
+        this.boxMesh(p.x, p.y, 0.35, 0.45, 1.3, 0.1, 0x2a2a2e, { rough: 0.7 });
+        break;
+      case 'yogaMat':
+        this.boxMesh(p.x, p.y, 0, 0.7, 1.6, 0.012, new THREE.Color(p.color).getHex(), { rough: 1, shadow: false });
+        break;
+
+      // ---- Switch room
+      case 'tvWall': {
+        const { x, y } = p;
+        if (!this.place('cabinetTelevision', x, y, 0.5, 2.0, { h: 0.5, rot: Math.PI / 2, stretch: true })) {
+          this.boxMesh(x, y, 0, 0.5, 2.0, 0.5, dark ? 0x6e533b : 0xa8825a);
+        }
+        this.boxMesh(x + 0.15, y + 0.85, 0.5, 0.18, 0.3, 0.1, 0x2a2a2e);
+        this.boxMesh(x + 0.15, y + 0.78, 0.5, 0.18, 0.07, 0.1, 0xe60012);
+        this.boxMesh(x + 0.15, y + 1.15, 0.5, 0.18, 0.07, 0.1, 0x00a2e8);
+        this.boxMesh(0.0, y + 0.1, 0.8, 0.07, 1.8, 1.05, 0x18181a, { rough: 0.4 });
+        this.tvScreen = this.boxMesh(0.07, y + 0.16, 0.86, 0.006, 1.68, 0.93, 0x000000, { emissive: 0x4488ff, ei: 0.9, shadow: false });
+        const l = new THREE.PointLight(0x8fb4ff, 0.8, 4);
+        l.position.set(0.9, 1.3, y + 1.0);
+        this.room.add(l);
+        break;
+      }
+      case 'sofaY':
+        if (!this.place('loungeSofa', p.x - 0.05, p.y - 0.15, 0.85, p.d + 0.3, { h: 0.8, rot: -Math.PI / 2, stretch: true })) {
+          this.boxMesh(p.x, p.y, 0, 0.8, p.d, 0.32, new THREE.Color(p.color).getHex());
+        }
+        break;
+
+      // ---- movie room
+      case 'movieScreen': {
+        this.boxMesh(0, p.y - 0.06, 0.44, 0.03, p.d + 0.12, 1.72, 0x18181a);
+        this.movieScreen = this.boxMesh(0.03, p.y, 0.5, 0.006, p.d, 1.6, 0x000000, { emissive: 0xc8dcff, ei: 0.9, shadow: false });
+        this.movieLight = new THREE.PointLight(0x9ab8ff, 1.2, 6);
+        this.movieLight.position.set(1.4, 1.3, p.y + p.d / 2);
+        this.room.add(this.movieLight);
+        break;
+      }
+      case 'popcorn': {
+        const { x, y } = p;
+        this.boxMesh(x, y, 0, 0.6, 0.5, 0.8, 0xc0392b, { rough: 0.5 });
+        const glass = new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0xffc94a, emissiveIntensity: 0.35, transparent: true, opacity: 0.75, roughness: 0.2 });
+        this.boxMesh(x + 0.05, y + 0.05, 0.8, 0.5, 0.4, 0.45, 0, { mat: glass, shadow: false });
+        this.boxMesh(x, y, 1.25, 0.6, 0.5, 0.08, 0xc0392b, { rough: 0.5 });
+        break;
+      }
     }
   }
 
@@ -1203,6 +1349,16 @@ export class Office3D extends window.Office {
       b.m.material.emissiveIntensity = on ? 1.2 : 0.05;
     }
     if (this.arcadeScreen) this.arcadeScreen.material.emissive.setHSL((t * 0.05) % 1, 0.7, 0.5);
+    if (this.tvScreen) this.tvScreen.material.emissive.setHSL((t * 0.08) % 1, 0.6, 0.5);
+    if (this.movieScreen) {
+      const g = 0.75 + 0.25 * Math.sin(t * 2.3) * Math.sin(t * 0.7 + 1);
+      this.movieScreen.material.emissiveIntensity = g;
+      if (this.movieLight) this.movieLight.intensity = 1.2 * g;
+    }
+    if (this.bag) {
+      const punching = this.plan.pois.some((q) => q.act === 'box' && q.taken && this.people.get(q.taken) && !this.people.get(q.taken).path.length);
+      this.bag.rotation.x = punching ? Math.max(0, Math.sin(t * 6)) * 0.15 : this.bag.rotation.x * 0.95;
+    }
     const fbPlaying = this.plan.pois.filter((q) => q.pair === 'fb' && q.taken).length === 2;
     if (this.rods) this.rods.forEach((r, k) => { r.position.z = this.plan.props.find((q) => q.t === 'foosball').y + 0.4 + (fbPlaying ? Math.sin(t * 8 + k) * 0.06 : 0); r.rotation.z = fbPlaying ? Math.sin(t * 12 + k) * 0.6 : 0; });
     this.updateBall();

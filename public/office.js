@@ -72,7 +72,8 @@
     const dark = matchMedia('(prefers-color-scheme: dark)').matches;
     return dark ? {
       dark: true,
-      wood1: '#4a3f35', wood2: '#453a31', woodLine: 'rgba(0,0,0,.22)',
+      wood1: '#a8865f', wood2: '#a07f58', woodLine: 'rgba(70,45,20,.28)',
+      gymFloor: '#2e3236', gameFloor: '#3c3550', movieFloor: '#3e2328',
       tileA: '#3d4044', tileB: '#35383c', carpet: '#33404d', carpetLine: 'rgba(255,255,255,.04)',
       wallL: '#4a4640', wallR: '#3f3b36', wallTop: '#5a554e', trim: '#2b2926',
       deskTop: '#8a6a4c', deskL: '#6e533b', deskR: '#5c4431',
@@ -84,7 +85,8 @@
       plant: '#4f8a52', pot: '#9a5b3c', shadow: 'rgba(0,0,0,.28)', book: ['#c96442', '#3b8ee0', '#5f9a4c', '#c9a24c', '#8b6be6'],
     } : {
       dark: false,
-      wood1: '#e6d3b6', wood2: '#dfcaab', woodLine: 'rgba(120,90,50,.12)',
+      wood1: '#ddbf92', wood2: '#d5b688', woodLine: 'rgba(120,80,40,.18)',
+      gymFloor: '#6b727a', gameFloor: '#cfc6e0', movieFloor: '#8a4a52',
       tileA: '#f4f4f1', tileB: '#e6e7e3', carpet: '#c9d3dc', carpetLine: 'rgba(0,0,0,.035)',
       wallL: '#f4efe6', wallR: '#e8e1d4', wallTop: '#fbf8f2', trim: '#cfc5b3',
       deskTop: '#c89f72', deskL: '#a8825a', deskR: '#946f4b',
@@ -259,9 +261,22 @@
       const pods = Math.max(2, Math.ceil((nWorking + 2) / 4));
       const podCols = pods <= 4 ? 2 : 3;
       const podRows = Math.ceil(pods / podCols);
-      const OW = 1.3 + (podCols - 1) * 4.2 + 3.9; // open office width
-      const OD = podRows * 4.7 + 0.8;             // open office depth (pods)
-      const D = Math.max(OD + 3.6, 14.5);
+      // Three columns: rooms on the left (gym / Switch room / corridor with
+      // the door / movie room), the open office with the desks in the middle,
+      // meeting room / pantry / lounge on the right.
+      const LW = 6.4;                              // left column width
+      const GD = 5.0, SD = 4.6, CW = 1.6;          // gym, Switch room, corridor depths
+      const SY = GD, CY = GD + SD, MY = GD + SD + CW; // where each starts
+      const OX = LW;                               // open office starts here
+      const OW = OX + 1.3 + (podCols - 1) * 4.2 + 3.9; // open office right edge
+      const TS = 3.2;                              // games strip along the back wall
+      const FS = 2.8;                              // vending / phone booth strip at the front
+      const blockH = (podRows - 1) * 4.7 + 3.4;    // pods, seat to seat
+      const D = Math.max(MY + 5.6, TS + blockH + FS + 1.0);
+      const spare = D - TS - blockH - FS;
+      const P0 = TS + spare / 2 + 0.85;            // first pod row: desks centred
+      const FY = D - FS;
+      const OD = FY;                               // open office depth (kept for callers)
       const RW = 7.2;                              // right column width
       const W = OW + RW;
       const MR = 5.2;                              // meeting room depth
@@ -296,7 +311,7 @@
       // ---- cubicle pods: 4 desks back to back with a divider
       for (let p = 0; p < pods; p++) {
         const c = p % podCols, r = Math.floor(p / podCols);
-        const px = 1.3 + c * 4.2, py = 2.0 + r * 4.7;
+        const px = OX + 1.3 + c * 4.2, py = P0 + r * 4.7;
         const panel = PANEL[p % PANEL.length];
         for (let k = 0; k < 2; k++) {
           const x = px + k * 1.5;
@@ -320,42 +335,42 @@
       solid(rx, 0.2, 0.7, 0.6);
       add(OW - 2.3 + 0.3 + 0.5, () => this.printer(OW - 2.3, 0.25));
       solid(OW - 2.3, 0.25, 0.75, 0.55);
-      for (const [x, y] of [[0.45, 0.45], [0.45, OD - 0.2]]) { add(x + y, () => this.plant(x, y)); prop('plant', { x, y }); solid(x - 0.2, y - 0.2, 0.4, 0.4); }
-      const windows = [];
-      for (let x = 1.0; x < OW - 2.6; x += 2.4) {
+      for (const [x, y] of [[OX + 0.45, 0.45], [OX + 0.45, FY - 0.4]]) { add(x + y, () => this.plant(x, y)); prop('plant', { x, y }); solid(x - 0.2, y - 0.2, 0.4, 0.4); }
+      const windows = [0.9, 3.5]; // gym
+      for (let x = OX + 1.0; x < OW - 2.6; x += 2.4) {
         windows.push(x);
         poi(x + 0.75, 0.75, 'window', 'back');
       }
-      poi(0.95, OD - 0.2, 'plant', 'back');
+      poi(OX + 0.95, FY - 0.4, 'plant', 'back');
 
-      // ---- ping-pong corner
-      const tx = 2.4, ty = OD + 1.0;
+      // ---- games strip along the back wall: ping-pong and foosball
+      const tx = OX + 1.4, ty = 1.0;
       add(tx + 1.3 + ty + 0.7, () => this.pingpong(tx, ty));
       prop('pingpong', { x: tx, y: ty });
       solid(tx, ty, 2.6, 1.4, 0.05);
       poi(tx - 0.55, ty + 0.7, 'pingpong', 'side', { pair: 'pp' });
       poi(tx + 3.15, ty + 0.7, 'pingpong', 'side', { pair: 'pp' });
       const pp = { x0: tx - 0.2, x1: tx + 2.8, y: ty + 0.7 };
-
-      // ---- front corner: vending machines, foosball, phone booth
-      const fy = OD + 3.7;
-      if (D - fy >= 3.4) {
-        add(0.5 + fy + 0.4, () => this.vending(0.12, fy, '#c0392b'));
-        prop('vending', { x: 0.12, y: fy, color: '#c0392b' });
-        prop('vending', { x: 0.12, y: fy + 0.8, color: '#2f6fb0' });
-        add(0.5 + fy + 1.2, () => this.vending(0.12, fy + 0.8, '#2f6fb0'));
-        solid(0.1, fy, 0.75, 1.55);
-        poi(1.3, fy + 0.4, 'vending', 'back');
-        poi(1.3, fy + 1.2, 'vending', 'back');
-      }
-      if (D - fy >= 2.2) {
-        const fx = 3.0, fby = fy + 0.4;
+      {
+        const fx = OX + 5.6, fby = 1.3;
         add(fx + 0.8 + fby + 0.4, () => this.foosball(fx, fby));
         prop('foosball', { x: fx, y: fby });
         solid(fx, fby, 1.6, 0.8, 0.05);
         poi(fx - 0.45, fby + 0.4, 'foosball', 'side', { pair: 'fb' });
         poi(fx + 2.05, fby + 0.4, 'foosball', 'side', { pair: 'fb' });
-        const bx = OW - 2.0, by = fy;
+      }
+
+      // ---- front strip: vending machines and the phone booth
+      {
+        const vx = OX + 0.15, vy = FY + 0.6;
+        add(vx + 0.38 + vy + 0.4, () => this.vending(vx, vy, '#c0392b'));
+        prop('vending', { x: vx, y: vy, color: '#c0392b' });
+        prop('vending', { x: vx, y: vy + 0.8, color: '#2f6fb0' });
+        add(vx + 0.38 + vy + 1.2, () => this.vending(vx, vy + 0.8, '#2f6fb0'));
+        solid(vx - 0.02, vy, 0.75, 1.55);
+        poi(vx + 1.18, vy + 0.4, 'vending', 'back');
+        poi(vx + 1.18, vy + 1.2, 'vending', 'back');
+        const bx = OW - 2.0, by = FY + 0.5;
         this.booth(add, bx, by);
         prop('booth', { x: bx, y: by });
         solid(bx - 0.05, by - 0.05, 1.4, 0.1, 0.03);
@@ -366,6 +381,85 @@
         add(OW - 0.45 + D - 0.6, () => this.plant(OW - 0.45, D - 0.6));
         prop('plant', { x: OW - 0.45, y: D - 0.6 });
       }
+
+      // ---- left column: gym, Switch room, corridor (door), movie room
+      const vGlass = (x, y0, y1) => {
+        for (let y = y0; y < y1 - 0.01; y += 1) this.glassX(add, x, y, Math.min(1, y1 - y));
+        prop('glass', { x, y: y0, w: 0, d: y1 - y0 });
+        solid(x - 0.05, y0, 0.1, y1 - y0, 0.05);
+      };
+      const hGlass = (y, x0, x1) => {
+        for (let x = x0; x < x1 - 0.01; x += 1) this.glassY(add, x, y, Math.min(1, x1 - x));
+        prop('glass', { x: x0, y, w: x1 - x0, d: 0 });
+        solid(x0, y - 0.05, x1 - x0, 0.1, 0.05);
+      };
+      vGlass(LW, 0, 3.6); vGlass(LW, 4.6, GD);             // gym, door at 3.6–4.6
+      hGlass(GD, 0, LW);
+      vGlass(LW, SY, SY + 2.4); vGlass(LW, SY + 3.4, CY); // Switch room
+      hGlass(CY, 0, LW);
+      hGlass(MY, 0, LW);
+      vGlass(LW, MY, MY + 0.3); vGlass(LW, MY + 1.3, D);   // movie room
+
+      // gym: treadmills under the windows, a punching bag, dumbbells in
+      // front of the mirror, a bench and two yoga mats
+      for (const gx of [0.7, 1.8, 2.9]) {
+        add(gx + 0.4 + 1.2, () => this.treadmill(gx, 0.3));
+        prop('treadmill', { x: gx, y: 0.3 });
+        solid(gx, 0.3, 0.8, 0.3);
+        poi(gx + 0.4, 1.35, 'run', 'back', { anim: 'sprint', emoji: '🏃' });
+      }
+      add(4.8 + 1.4 + 0.2, () => this.punchBag(4.8, 1.4));
+      prop('punchBag', { x: 4.8, y: 1.4 });
+      solid(4.58, 1.18, 0.44, 0.44);
+      poi(4.8, 2.15, 'box', 'back', { anim: 'attack-melee-right', emoji: '🥊' });
+      prop('mirror', { y: 2.5, d: 2.2 });
+      add(0.15 + 0.45 + 2.7 + 0.9, () => this.dumbbellRack(0.15, 2.7));
+      prop('dumbbells', { x: 0.15, y: 2.7, w: 0.45, d: 1.8 });
+      solid(0.15, 2.7, 0.45, 1.8);
+      poi(1.15, 3.6, 'lift', 'back', { anim: 'holding-both', emoji: '🏋️', yaw: -Math.PI / 2 });
+      add(2.4 + 0.22 + 3.0 + 0.65, () => this.bench(2.4, 3.0));
+      prop('bench', { x: 2.4, y: 3.0 });
+      solid(2.4, 3.0, 0.45, 1.3);
+      poi(2.62, 3.65, 'bench', 'front', { sit: 0.45, emoji: '💪', yaw: Math.PI / 2 });
+      for (const [mx0, col] of [[3.5, '#5f9a4c'], [4.5, '#8b6be6']]) {
+        add(mx0 + 3.0, () => this.yogaMat(mx0, 3.0, col));
+        prop('yogaMat', { x: mx0, y: 3.0, color: col });
+        poi(mx0 + 0.35, 3.8, 'yoga', 'front', { sit: 0.03, emoji: '🧘' });
+      }
+
+      // Switch room: TV on the wall, a couch facing it, two beanbags
+      const tvY = SY + 1.2;
+      add(0.1 + 0.25 + tvY + 1.0, () => this.tvWall(0.1, tvY));
+      prop('tvWall', { x: 0.1, y: tvY });
+      solid(0.1, tvY, 0.5, 2.0);
+      prop('rug', { x: 1.0, y: SY + 0.9, w: 2.4, d: 2.6 });
+      add(2.7 + 0.4 + SY + 1.0 + 2.4, () => this.sofaY(2.7, SY + 1.0, 2.4, '#8b6be6'));
+      prop('sofaY', { x: 2.7, y: SY + 1.0, d: 2.4, color: '#8b6be6' });
+      solid(2.7, SY + 1.0, 0.8, 2.4);
+      for (let k = 0; k < 3; k++) poi(2.92, SY + 1.45 + k * 0.75, 'game', 'back', { sit: 0.36, emoji: '🎮', yaw: -Math.PI / 2 });
+      for (const [bx, by, col] of [[1.6, SY + 0.6, '#c96442'], [1.6, SY + 3.8, '#3b8ee0']]) {
+        add(bx + by, () => this.beanbag(bx, by, col));
+        prop('beanbag', { x: bx, y: by, color: col });
+        poi(bx, by, 'beanbag', 'back', { sit: 0.18, emoji: '🎮', yaw: Math.atan2(0.6 - bx, tvY + 1.0 - by) });
+      }
+
+      // movie room: screen on the wall, two rows of sofas, popcorn
+      prop('movieScreen', { y: MY + 0.5, d: D - MY - 1.0 });
+      const L = Math.min(3.4, D - MY - 1.8);
+      const sy0 = (MY + D) / 2 + 0.2 - L / 2;
+      const seats = Math.max(2, Math.floor(L / 0.8));
+      for (const [rx0, col] of [[2.2, '#a8323e'], [3.9, '#a8323e']]) {
+        add(rx0 + 0.4 + sy0 + L, () => this.sofaY(rx0, sy0, L, col));
+        prop('sofaY', { x: rx0, y: sy0, d: L, color: col });
+        solid(rx0, sy0, 0.8, L);
+        for (let k = 0; k < seats; k++) {
+          poi(rx0 + 0.22, sy0 + 0.45 + k * (L - 0.9) / (seats - 1), 'movie', 'back', { sit: 0.36, emoji: '🍿', yaw: -Math.PI / 2 });
+        }
+      }
+      add(5.4 + 0.3 + D - 0.9 + 0.25, () => this.popcorn(5.4, D - 0.9));
+      prop('popcorn', { x: 5.4, y: D - 0.9 });
+      solid(5.4, D - 0.9, 0.6, 0.5);
+      poi(5.7, D - 1.45, 'popcorn', 'front', { anim: 'interact-right', emoji: '🍿', yaw: 0 });
 
       // ---- meeting room behind glass, door at y 3.6–4.6
       const mx = OW;
@@ -459,10 +553,10 @@
       add(lx - 0.2 + D - 0.6, () => this.floorLamp(lx - 0.2, D - 0.6));
 
       const posters = [
-        { y: 2.2, color: '#c96442', text: 'SHIP IT' },
-        { y: 4.6, color: '#10a37f', text: 'TESTS ✓' },
+        { y: SY + 3.45, color: '#8b6be6', text: 'GAME ON' },
       ];
-      return { W, D, OW, OD, MR, PY, RW, grid, items, props, pois, desks, windows, posters, pp, door: { x: 0.4, y: D - 1.2 } };
+      const rooms = { LW, GD, SY, CY, MY, OX, FY, tvY };
+      return { W, D, OW, OD, MR, PY, RW, grid, items, props, pois, desks, windows, posters, pp, rooms, door: { x: 0.4, y: CY + CW / 2 } };
     }
 
     glassX(add, x, y, d) {
@@ -739,6 +833,15 @@
         }
       }
       for (let y = 0.5; y < D; y += 0.5) this.poly([P(0, y), P(OW, y), P(OW, y + 0.012), P(0, y + 0.012)], pal.woodLine);
+      const rm = this.plan.rooms;
+      if (rm) {
+        // rubber gym floor, carpet in the Switch and movie rooms
+        this.poly([P(0, 0), P(rm.LW, 0), P(rm.LW, rm.GD), P(0, rm.GD)], pal.gymFloor);
+        for (let x = 1; x < rm.LW; x++) this.poly([P(x, 0), P(x + 0.02, 0), P(x + 0.02, rm.GD), P(x, rm.GD)], pal.carpetLine);
+        this.poly([P(0, rm.SY), P(rm.LW, rm.SY), P(rm.LW, rm.CY), P(0, rm.CY)], pal.gameFloor);
+        this.poly([P(1.0, rm.SY + 0.9), P(3.4, rm.SY + 0.9), P(3.4, rm.SY + 3.5), P(1.0, rm.SY + 3.5)], pal.rug, pal.rugEdge);
+        this.poly([P(0, rm.MY), P(rm.LW, rm.MY), P(rm.LW, D), P(0, D)], pal.movieFloor);
+      }
       this.poly([P(OW, 0), P(W, 0), P(W, MR), P(OW, MR)], pal.carpet);
       for (let x = OW + 0.5; x < W; x += 0.5) this.poly([P(x, 0), P(x + 0.015, 0), P(x + 0.015, MR), P(x, MR)], pal.carpetLine);
       for (let i = 0; i < Math.ceil((W - OW) * 2); i++) {
@@ -799,6 +902,19 @@
       this.onWall('y0', OW + 0.5, 2.2, (c) => {
         c.font = '700 9px ui-sans-serif, system-ui, sans-serif'; c.fillStyle = this.shade(pal.trim, -60); c.fillText('MEETING', 0, 0);
       });
+      if (rm) {
+        // gym: sign on the back wall, mirror on the left wall
+        this.onWall('y0', 5.2, 2.2, (c) => {
+          c.font = '700 9px ui-sans-serif, system-ui, sans-serif'; c.fillStyle = this.shade(pal.trim, -60); c.fillText('GYM', 0, 0);
+        });
+        this.poly([P(0, 2.5, 0.25), P(0, 4.7, 0.25), P(0, 4.7, 1.9), P(0, 2.5, 1.9)], pal.dark ? '#5d7387' : '#cfe0ec', pal.trim);
+        this.poly([P(0, 2.9, 0.4), P(0, 3.3, 0.4), P(0, 3.7, 1.8), P(0, 3.3, 1.8)], 'rgba(255,255,255,.25)');
+        // movie screen, flickering with the film
+        const glow = 0.85 + 0.15 * Math.sin(t * 2.3) * Math.sin(t * 0.7);
+        const sy0 = rm.MY + 0.5, sy1 = D - 0.5;
+        this.poly([P(0, sy0 - 0.06, 0.44), P(0, sy1 + 0.06, 0.44), P(0, sy1 + 0.06, 2.16), P(0, sy0 - 0.06, 2.16)], '#18181a');
+        this.poly([P(0, sy0, 0.5), P(0, sy1, 0.5), P(0, sy1, 2.1), P(0, sy0, 2.1)], `rgba(${Math.round(200 * glow)},${Math.round(220 * glow)},255,1)`);
+      }
       // left wall: posters, clock, door
       for (const ps of this.plan.posters) {
         this.poly([P(0, ps.y, 0.95), P(0, ps.y + 0.9, 0.95), P(0, ps.y + 0.9, 1.95), P(0, ps.y, 1.95)], ps.color);
@@ -995,6 +1111,74 @@
       this.box(x, y + 0.7, 0.8, 0.7, 0.2, 0.08, '#4a3a8a', '#3a2a6a', '#2b1f52');
       const j = this.iso(x + 0.25, y + 0.8, 0.88);
       this.ctx.fillStyle = '#e04a4a'; this.ctx.beginPath(); this.ctx.arc(j.x, j.y - 3, 2.5, 0, Math.PI * 2); this.ctx.fill();
+    }
+
+    // ---- gym / Switch room / movie room
+
+    treadmill(x, y) {
+      const dk = '#3a3d42', dkL = '#2c2f33', dkR = '#24272a';
+      this.box(x, y + 0.15, 0, 0.8, 1.55, 0.08, '#4a4e54', dkL, dkR);
+      this.box(x + 0.1, y + 0.2, 0.08, 0.6, 1.45, 0.01, '#1c1d20', '#1c1d20', '#1c1d20');
+      this.box(x + 0.02, y + 0.12, 0, 0.06, 0.06, 1.05, dk, dkL, dkR);
+      this.box(x + 0.72, y + 0.12, 0, 0.06, 0.06, 1.05, dk, dkL, dkR);
+      this.box(x, y, 1.0, 0.8, 0.3, 0.12, '#4a4e54', dkL, dkR);
+      const P = (a, b, c) => this.iso(a, b, c);
+      this.poly([P(x + 0.2, y + 0.3, 1.02), P(x + 0.6, y + 0.3, 1.02), P(x + 0.6, y + 0.3, 1.1), P(x + 0.2, y + 0.3, 1.1)], '#3fd38a');
+    }
+
+    punchBag(x, y) {
+      const c = this.ctx;
+      const a = this.iso(x, y, 2.3), b = this.iso(x, y, 1.65);
+      c.strokeStyle = '#8d939a'; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+      const sway = Math.sin(this.t / 500) * 0.03;
+      this.box(x - 0.2 + sway, y - 0.2, 0.6, 0.4, 0.4, 1.05, '#d0463b', '#b03a30', '#922f27');
+      this.box(x - 0.2 + sway, y - 0.2, 1.05, 0.4, 0.4, 0.06, '#2a2a2e', '#1f1f22', '#18181a');
+    }
+
+    dumbbellRack(x, y) {
+      this.box(x, y, 0, 0.45, 1.8, 0.55, '#4a4e54', '#3a3d42', '#2c2f33');
+      const cols = ['#c0392b', '#2f6fb0', '#5f9a4c', '#c9a24c', '#2a2a2e'];
+      for (let k = 0; k < 5; k++) this.box(x + 0.1, y + 0.12 + k * 0.33, 0.55, 0.25, 0.22, 0.12, cols[k], this.shade(cols[k], -25), this.shade(cols[k], -40));
+    }
+
+    bench(x, y) {
+      this.box(x + 0.15, y + 0.2, 0, 0.12, 0.12, 0.35, '#3a3d42', '#2c2f33', '#24272a');
+      this.box(x + 0.15, y + 1.0, 0, 0.12, 0.12, 0.35, '#3a3d42', '#2c2f33', '#24272a');
+      this.box(x, y, 0.35, 0.45, 1.3, 0.12, '#2a2a2e', '#1f1f22', '#18181a');
+    }
+
+    yogaMat(x, y, color) {
+      const P = (a, b, c) => this.iso(a, b, c);
+      this.poly([P(x, y, 0.01), P(x + 0.7, y, 0.01), P(x + 0.7, y + 1.6, 0.01), P(x, y + 1.6, 0.01)], color, this.shade(color, -30));
+    }
+
+    tvWall(x, y) {
+      // low cabinet with a console on it, TV on the wall above
+      this.box(x, y, 0, 0.5, 2.0, 0.5, this.shade(this.pal.deskTop, -5), this.pal.deskL, this.pal.deskR);
+      this.box(x + 0.15, y + 0.85, 0.5, 0.18, 0.3, 0.1, '#2a2a2e', '#1f1f22', '#18181a');
+      this.box(x + 0.15, y + 0.78, 0.5, 0.18, 0.07, 0.1, '#e60012', '#c00010', '#a0000d');
+      this.box(x + 0.15, y + 1.15, 0.5, 0.18, 0.07, 0.1, '#00a2e8', '#0088c4', '#0070a0');
+      const P = (a, b, c) => this.iso(a, b, c);
+      const y0 = y + 0.1, y1 = y + 1.9;
+      this.poly([P(0.02, y0, 0.8), P(0.02, y1, 0.8), P(0.02, y1, 1.85), P(0.02, y0, 1.85)], '#18181a');
+      const hue = (this.t / 30) % 360;
+      this.poly([P(0.04, y0 + 0.06, 0.86), P(0.04, y1 - 0.06, 0.86), P(0.04, y1 - 0.06, 1.79), P(0.04, y0 + 0.06, 1.79)], `hsl(${hue},65%,55%)`);
+    }
+
+    // sofa with its back to +x, facing the left wall
+    sofaY(x, y, len, color) {
+      const d = this.shade(color, -25), e = this.shade(color, -40);
+      this.box(x, y, 0, 0.8, len, 0.32, color, d, e);
+      this.box(x + 0.58, y, 0.32, 0.22, len, 0.42, this.shade(color, 10), d, e);
+      this.box(x, y - 0.15, 0, 0.8, 0.15, 0.52, this.shade(color, 6), d, e);
+      this.box(x, y + len, 0, 0.8, 0.15, 0.52, this.shade(color, 6), d, e);
+    }
+
+    popcorn(x, y) {
+      this.box(x, y, 0, 0.6, 0.5, 0.8, '#c0392b', '#a03024', '#80261d');
+      this.box(x + 0.05, y + 0.05, 0.8, 0.5, 0.4, 0.45, 'rgba(255,240,200,.5)', 'rgba(255,225,140,.75)', 'rgba(240,210,120,.75)');
+      this.box(x, y, 1.25, 0.6, 0.5, 0.08, '#c0392b', '#a03024', '#80261d');
     }
 
     floorLamp(x, y) {

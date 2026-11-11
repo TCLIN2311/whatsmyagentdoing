@@ -75,6 +75,13 @@ function metadata(s, agent, file) {
     s.title = clean(d.title || d.customTitle) || s.title;
     const created = typeof d.createdAt === 'number' ? d.createdAt : Date.parse(d.createdAt);
     if (Number.isFinite(created)) s.startedAt = created;
+  } else if (agent === 'cowork') {
+    s.title = clean(d.title) || s.title;
+    const folder = Array.isArray(d.userSelectedFolders) ? d.userSelectedFolders.find((f) => typeof f === 'string' && f) : null;
+    if (folder) s.cwd = folder;
+    if (!s.model && typeof d.model === 'string') s.model = d.model;
+    if (Number.isFinite(d.createdAt)) s.startedAt = d.createdAt;
+    s.archived = d.isArchived === true;
   } else if (agent === 'grok') {
     s.cwd = d.info?.cwd || s.cwd;
     s.title = clean(d.generated_title || d.session_summary) || s.title;

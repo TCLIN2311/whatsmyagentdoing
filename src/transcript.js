@@ -2,7 +2,7 @@
 
 // The recent conversation of one session, for the side panel: what you
 // asked, what the agent answered and which tools it ran. Read-only, from the
-// end of the session's own log. Claude Code and Codex logs keep full message
+// end of the session's own log. Claude Code, Cowork and Codex logs keep full message
 // text; for every other client the existing parser replays the tail and the
 // timeline records each change of prompt, reply and tool.
 
@@ -47,8 +47,8 @@ function* records(lines) {
 function claude(lines) {
   const out = [];
   for (const d of records(lines)) {
-    const at = time(d.timestamp);
-    if (d.type === 'user' && !d.isMeta) {
+    const at = time(d.timestamp || d._audit_timestamp);
+    if (d.type === 'user' && !d.isMeta && !d.isSynthetic && !d.isReplay) {
       const c = d.message?.content;
       if (Array.isArray(c) && c.some((x) => x.type === 'tool_result')) continue;
       const t = typeof c === 'string' ? c : Array.isArray(c) ? c.filter((x) => x.type === 'text').map((x) => x.text).join('\n') : '';
@@ -127,7 +127,7 @@ function transcript(session, apply) {
   let messages;
   try {
     const lines = tailLines(file);
-    messages = session.agent === 'claude' ? claude(lines)
+    messages = session.agent === 'claude' || session.agent === 'cowork' ? claude(lines)
       : session.agent === 'codex' ? codex(lines)
         : apply ? replay(lines, session, apply) : [];
   } catch { return fallback(); }

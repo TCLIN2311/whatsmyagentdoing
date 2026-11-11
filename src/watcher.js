@@ -10,7 +10,7 @@ const path = require('path');
 const { EventEmitter } = require('events');
 const { StringDecoder } = require('string_decoder');
 const crypto = require('crypto');
-const { newSession, applyClaude, applyCodex, applyGemini, applyGeminiDocument, applyCopilot, applyOMP, applyAntigravity } = require('./parsers');
+const { newSession, applyClaude, applyCowork, applyCodex, applyGemini, applyGeminiDocument, applyCopilot, applyOMP, applyAntigravity } = require('./parsers');
 const { Magpie } = require('./magpie');
 const { clientFiles, metadata, applyKimi, applyDsh, applyGrok, readDsh } = require('./clients');
 const external = require('./external');
@@ -44,6 +44,13 @@ const ANTIGRAVITY_HOME = process.env.ANTIGRAVITY_HOME || path.join(home, '.gemin
 const ANTIGRAVITY_DIR = path.join(ANTIGRAVITY_HOME, 'brain');
 const ANTIGRAVITY_HISTORY = path.join(ANTIGRAVITY_HOME, 'history.jsonl');
 const ANTIGRAVITY_ANNOTATIONS = path.join(ANTIGRAVITY_HOME, 'annotations');
+// Cowork tasks of the Claude desktop app: <app>/local-agent-mode-sessions/<org>/<user>/local_<id>/audit.jsonl
+const CLAUDE_APP_DIR = process.env.CLAUDE_APP_DIR || (process.platform === 'darwin'
+  ? path.join(home, 'Library', 'Application Support', 'Claude')
+  : process.platform === 'win32'
+    ? path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Claude')
+    : path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'Claude'));
+const COWORK_DIR = path.join(CLAUDE_APP_DIR, 'local-agent-mode-sessions');
 const CLIENT_DIRS = {
   kimi: path.join(process.env.KIMI_CODE_HOME || path.join(home, '.kimi-code'), 'sessions'),
   dsh: path.join(process.env.DSH_HOME || path.join(home, '.dsh'), 'sessions'),
@@ -86,6 +93,22 @@ function claudeFiles() {
             out.push({ agent: 'claude', file: path.join(sub, s.name), id: s.name.slice(0, -6), parentId: e.name });
           }
         }
+      }
+    }
+  }
+  return out;
+}
+
+function coworkFiles() {
+  const out = [];
+  for (const org of ls(COWORK_DIR)) {
+    if (!org.isDirectory()) continue;
+    for (const user of ls(path.join(COWORK_DIR, org.name))) {
+      if (!user.isDirectory()) continue;
+      const dir = path.join(COWORK_DIR, org.name, user.name);
+      for (const e of ls(dir)) {
+        if (!e.isDirectory() || !e.name.startsWith('local_')) continue;
+        out.push({ agent: 'cowork', file: path.join(dir, e.name, 'audit.jsonl'), id: e.name, metadata: path.join(dir, `${e.name}.json`) });
       }
     }
   }
@@ -365,7 +388,7 @@ class Watcher extends EventEmitter {
       const ompRoots = ompDirs(this.ompDir, process.env, home, process.platform);
       // PI_CODING_AGENT_DIR can point both at one directory; its logs stay OMP's then.
       const piRoots = piDirs(process.env, home).filter((r) => !ompRoots.some((o) => path.resolve(o.dir) === path.resolve(r.dir)));
-      this.candidates = [...claudeFiles(), ...codexFiles(since), ...geminiFiles(), ...copilotFiles(),
+      this.candidates = [...claudeFiles(), ...coworkFiles(), ...codexFiles(since), ...geminiFiles(), ...copilotFiles(),
         ...clientFiles(CLIENT_DIRS, since), ...ompFiles(since, ompRoots), ...ompFiles(since, piRoots, 'pi'),
         ...antigravityFiles(since)];
       // These have no file to tail, so they refresh with the walk.
@@ -461,7 +484,7 @@ class Watcher extends EventEmitter {
     if (c.parentId) { session.parentId = c.parentId; session.subagent = true; }
     session.mtime = st.mtimeMs;
     if (c.agent === 'gemini') session.geminiProject = c.project;
-    const apply = { claude: applyClaude, codex: applyCodex, gemini: applyGemini, copilot: applyCopilot, kimi: applyKimi, dsh: applyDsh, grok: applyGrok, omp: applyOMP, pi: applyOMP, antigravity: applyAntigravity }[c.agent];
+    const apply = { claude: applyClaude, cowork: applyCowork, codex: applyCodex, gemini: applyGemini, copilot: applyCopilot, kimi: applyKimi, dsh: applyDsh, grok: applyGrok, omp: applyOMP, pi: applyOMP, antigravity: applyAntigravity }[c.agent];
     const t = { session, offset: st.size, partial: '', apply, mtime: st.mtimeMs };
     if (c.agent === 'dsh') {
       t.whole = true;
@@ -638,6 +661,8 @@ class Watcher extends EventEmitter {
         const t = this.antigravityTitle(s.id);
         if (t) s.title = t;
       }
+      // Tasks archived in the app are put away; don't show them.
+      if (s.agent === 'cowork' && s.archived) continue;
       // A permission prompt from the optional Claude Code hook, until the log moves on.
       const wait = s.agent === 'claude' && !s.subagent && this.waiting.get(s.id);
       if (wait && wait.at > (s.lastEventAt || 0)) {
@@ -698,4 +723,4 @@ class Watcher extends EventEmitter {
   }
 }
 
-module.exports = { Watcher, CLAUDE_DIR, CODEX_DIR, GEMINI_DIR, CLIENT_DIRS, ompDirs, ANTIGRAVITY_DIR };
+module.exports = { Watcher, CLAUDE_DIR, COWORK_DIR, CODEX_DIR, GEMINI_DIR, CLIENT_DIRS, ompDirs, ANTIGRAVITY_DIR };

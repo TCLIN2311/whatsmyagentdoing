@@ -51,6 +51,7 @@
     "test:transcript": "node --test tests/transcript.cjs",
     "test:server": "node --test tests/server.cjs",
     "test:clients": "node --test tests/clients.cjs",
+    "test:cowork": "node --test tests/cowork.cjs",
     "test:ui:clients": "node tests/ui-clients.cjs"
   }
 }

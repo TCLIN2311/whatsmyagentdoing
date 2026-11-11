@@ -227,6 +227,47 @@ function applyClaude(s, d) {
   }
 }
 
+// --------------------------------------------------------------------- Cowork
+// Cowork tasks in the Claude desktop app run Claude Code in a sandbox. The
+// app keeps its stream-json output as audit.jsonl (stamped with
+// _audit_timestamp) next to local_<id>.json, which holds the task's title and
+// folders. The messages are Claude Code's, so most of it goes to applyClaude.
+
+function applyCowork(s, d) {
+  if (!d.timestamp && d._audit_timestamp) d = { ...d, timestamp: d._audit_timestamp };
+  switch (d.type) {
+    case 'system':
+      stamp(s, d.timestamp);
+      if (d.subtype === 'init' && d.model) s.model = d.model;
+      else if (d.subtype === 'status' && d.status === 'requesting') set(s, 'thinking');
+      return;
+    case 'result': {
+      stamp(s, d.timestamp);
+      const out = typeof d.result === 'string' ? d.result : '';
+      if (d.is_error || (d.subtype && d.subtype !== 'success')) {
+        set(s, 'error', null);
+        s.error = short(out || d.subtype || 'error', 120);
+      } else {
+        if (out) s.reply = clean(out) || s.reply;
+        set(s, 'done', null);
+      }
+      return;
+    }
+    case 'user':
+      // Skill bodies and replayed history aren't something you typed.
+      if (d.isSynthetic || d.isReplay) { stamp(s, d.timestamp); return; }
+      break;
+    case 'assistant':
+      break;
+    default:
+      stamp(s, d.timestamp);
+      return;
+  }
+  // `cwd` is the sandbox's own path; the real folder comes from the task file.
+  const { cwd, ...rest } = d;
+  applyClaude(s, rest);
+}
+
 // ---------------------------------------------------------------------- Codex
 
 function codexText(content) {
@@ -754,4 +795,4 @@ function applyAntigravity(s, d) {
   }
 }
 
-module.exports = { dayKey, newSession, applyClaude, applyCodex, applyGemini, applyGeminiDocument, applyCopilot, applyOMP, applyAntigravity, clean, describeClaudeTool, describeCodexCall, describeAntigravityTool, codexText };
+module.exports = { dayKey, newSession, applyClaude, applyCowork, applyCodex, applyGemini, applyGeminiDocument, applyCopilot, applyOMP, applyAntigravity, clean, describeClaudeTool, describeCodexCall, describeAntigravityTool, codexText };

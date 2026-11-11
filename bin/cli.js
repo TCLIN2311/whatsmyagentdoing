@@ -14,7 +14,7 @@ const pkg = require('../package.json');
 const EXTERNAL_DIRS = external.location();
 
 const HELP = `whatsmyagentdoing ${pkg.version}
-See what every Claude Code, Codex, Gemini CLI, Antigravity, Copilot CLI, OMP, Pi, Kimi Code, DSH, Grok Build, OpenCode and Hermes agent is doing, live.
+See what every Claude Code, Cowork, Codex, Gemini CLI, Antigravity, Copilot CLI, OMP, Pi, Kimi Code, DSH, Grok Build, OpenCode and Hermes agent is doing, live.
 
 Usage: node bin/cli.js [options]   (or /myoffice as a skill)
 

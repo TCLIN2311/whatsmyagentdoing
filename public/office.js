@@ -15,6 +15,7 @@
   const HAIR = ['#2a2019', '#4b3020', '#8a4b2a', '#c99a5b', '#1c1c1c', '#8c8c8c', '#a33a2c', '#3d3550'];
   const SHIRT = {
     claude: ['#c96442', '#d9825f', '#b4553a', '#e09a72'],
+    cowork: ['#b0703f', '#c98a55', '#93592f', '#ddb07f'],
     codex: ['#10a37f', '#2bb38f', '#0d8a6b', '#4cc3a0'],
     gemini: ['#4f7cf0', '#6b8ff5', '#3d66d6', '#8aa6f8'],
     copilot: ['#8f5cf5', '#a06af7', '#7a47d5', '#c5a4ff'],
@@ -29,6 +30,7 @@
   // Initials remain a fallback if an image cannot be loaded.
   const AGENT_BADGES = {
     claude: { label: 'Claude', short: 'Cl', color: '#c96442', logo: '/assets/agents/claude.png' },
+    cowork: { label: 'Cowork', short: 'Cw', color: '#b0703f', logo: '/assets/agents/claude.png' },
     codex: { label: 'Codex', short: 'Cx', color: '#10a37f', logo: '/assets/agents/codex.png' },
     gemini: { label: 'Gemini', short: 'G', color: '#4f7cf0', logo: '/assets/agents/gemini.png' },
     copilot: { label: 'Copilot', short: 'Co', color: '#8f5cf5', logo: '/assets/agents/copilot.svg', mono: true },

@@ -186,6 +186,75 @@ export class Office3D extends window.Office {
     return m;
   }
 
+  // White rolling office chair (meeting room): five-star base on casters.
+  rollingChair(x, y, face) {
+    const g = new THREE.Group();
+    const white = this._chairWhite || (this._chairWhite = new THREE.MeshStandardMaterial({ color: 0xf4f4f2, roughness: 0.45 }));
+    const grey = this._chairGrey || (this._chairGrey = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.35, metalness: 0.6 }));
+    const black = this._chairBlack || (this._chairBlack = new THREE.MeshStandardMaterial({ color: 0x1e1f22, roughness: 0.6 }));
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.03, 0.04), grey);
+      leg.position.set(Math.cos(a) * 0.13, 0.06, Math.sin(a) * 0.13); leg.rotation.y = -a; g.add(leg);
+      const wheel = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), black);
+      wheel.position.set(Math.cos(a) * 0.25, 0.03, Math.sin(a) * 0.25); g.add(wheel);
+    }
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.34, 10), grey);
+    post.position.y = 0.23; g.add(post);
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.07, 0.44), white);
+    seat.position.y = 0.42; g.add(seat);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.48, 0.05), white);
+    back.position.set(0, 0.72, -0.21); g.add(back);
+    g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    g.position.set(x, 0, y);
+    g.rotation.y = face === 'front' ? 0 : Math.PI;
+    this.room.add(g);
+  }
+
+  // A rack packed with GPU servers. Front panels glow (blue light lines,
+  // green status LEDs); the back shows cable bundles and connectors.
+  gpuRackTextures() {
+    if (this._gpuTex) return this._gpuTex;
+    const mk = (paint) => { const cv = document.createElement('canvas'); cv.width = 128; cv.height = 256; paint(cv.getContext('2d')); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t; };
+    const sleds = (c, glow) => {
+      c.fillStyle = glow ? '#000' : '#0c0d0f'; c.fillRect(0, 0, 128, 256);
+      for (let i = 0; i < 10; i++) {
+        const y = 6 + i * 25;
+        if (!glow) { c.fillStyle = '#17191c'; c.fillRect(4, y, 120, 21); c.fillStyle = '#23262a'; for (let x = 30; x < 120; x += 6) c.fillRect(x, y + 3, 3, 15); }
+        c.strokeStyle = glow ? '#4fc3ff' : '#2a7fb0'; c.lineWidth = 2;
+        c.beginPath(); c.moveTo(8, y + 18); c.bezierCurveTo(40, y + 4, 80, y + 20, 120, y + 8); c.stroke();
+        for (let j = 0; j < 4; j++) { c.fillStyle = (i + j) % 5 ? '#52f08a' : '#ffb347'; c.fillRect(8 + j * 5, y + 4, 3, 3); }
+      }
+    };
+    const rear = (c) => {
+      c.fillStyle = '#101113'; c.fillRect(0, 0, 128, 256);
+      for (let j = 0; j < 6; j++) {
+        const x = 10 + j * 20;
+        c.fillStyle = j % 2 ? '#0a0a0b' : '#1a1c20'; c.fillRect(x, 0, 9, 256);
+        for (let y = 14; y < 256; y += 30) { c.fillStyle = '#b9bfc6'; c.fillRect(x - 2, y, 13, 7); c.fillStyle = j % 3 ? '#2f6fb0' : '#c0392b'; c.fillRect(x - 2, y + 7, 13, 2); }
+      }
+    };
+    return (this._gpuTex = { front: mk((c) => sleds(c, false)), glow: mk((c) => sleds(c, true)), back: mk(rear) });
+  }
+
+  gpuRack(p) {
+    const H = 2.05;
+    const body = this._rackMat || (this._rackMat = new THREE.MeshStandardMaterial({ color: 0x1b1c1f, roughness: 0.45, metalness: 0.5 }));
+    this.boxMesh(p.x, p.y, 0, p.w, p.d, H, 0, { mat: body });
+    const tx = this.gpuRackTextures();
+    const front = this._rackFront || (this._rackFront = new THREE.MeshStandardMaterial({ map: tx.front, emissiveMap: tx.glow, emissive: 0xffffff, emissiveIntensity: 1.1, roughness: 0.4 }));
+    const back = this._rackBack || (this._rackBack = new THREE.MeshStandardMaterial({ map: tx.back, roughness: 0.6 }));
+    const plane = (mat, xFace, yaw) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(p.d - 0.08, H - 0.14), mat);
+      m.position.set(xFace, H / 2, p.y + p.d / 2);
+      m.rotation.y = yaw;
+      this.room.add(m);
+    };
+    const east = p.x + p.w + 0.003, west = p.x - 0.003;
+    if (p.face === 'e') { plane(front, east, Math.PI / 2); plane(back, west, -Math.PI / 2); }
+    else { plane(front, west, -Math.PI / 2); plane(back, east, Math.PI / 2); }
+  }
+
   // ---- interior finishes: walnut veneer, brown leather with brass studs
   restyle(model, mat) {
     model.traverse((o) => { if (o.isMesh) o.material = mat; });
@@ -294,7 +363,8 @@ export class Office3D extends window.Office {
     this.scene.add(this.room);
     this.screens.clear();
     this.blinkers = [];
-    const { W, D, OW, MR, PY } = plan;
+    const { D, OW, MR, PY } = plan;
+    const W = plan.RX || plan.W; // right column edge; the GPU room lies beyond
     const dark = this.pal.dark;
 
     // floors
@@ -317,8 +387,8 @@ export class Office3D extends window.Office {
       }
     }, 256);
     const tiles = this.patternTexture((c, s) => {
-      c.fillStyle = dark ? '#3d4044' : '#f4f4f1'; c.fillRect(0, 0, s, s);
-      c.fillStyle = dark ? '#35383c' : '#e3e4e0'; c.fillRect(0, 0, s / 2, s / 2); c.fillRect(s / 2, s / 2, s / 2, s / 2);
+      c.fillStyle = dark ? '#bfb39f' : '#e8dcc6'; c.fillRect(0, 0, s, s); // beige pantry tiles
+      c.fillStyle = dark ? '#b8ac98' : '#e2d5be'; c.fillRect(0, 0, s / 2, s / 2); c.fillRect(s / 2, s / 2, s / 2, s / 2);
     });
     planks.repeat.set(OW / 2, D / 2);
     floor(0, 0, OW, D, 0xffffff, planks, 0.45);
@@ -327,6 +397,32 @@ export class Office3D extends window.Office {
     floor(OW, MR, W - OW, PY - MR, 0xffffff, tiles);
     const planks2 = planks.clone(); planks2.needsUpdate = true; planks2.repeat.set((W - OW) / 2, (D - PY) / 2);
     floor(OW, PY, W - OW, D - PY, 0xffffff, planks2, 0.45);
+    if (plan.gpu) {
+      // GPU room: raised-floor panels, perforated along the cold aisle
+      const g = plan.gpu;
+      const raised = this.patternTexture((c, sz) => {
+        c.fillStyle = dark ? '#9ea2a6' : '#d5d8db'; c.fillRect(0, 0, sz, sz);
+        c.strokeStyle = 'rgba(0,0,0,.25)'; c.lineWidth = 3; c.strokeRect(1.5, 1.5, sz - 3, sz - 3);
+      });
+      raised.repeat.set(g.w / 0.6, D / 0.6);
+      floor(g.x, 0, g.w, D, 0xffffff, raised, 0.6);
+      const perf = this.patternTexture((c, sz) => {
+        c.fillStyle = '#7f8489'; c.fillRect(0, 0, sz, sz);
+        c.fillStyle = '#3d4044';
+        for (let y = 8; y < sz; y += 10) for (let x = 8; x < sz; x += 10) { c.beginPath(); c.arc(x, y, 2.4, 0, Math.PI * 2); c.fill(); }
+        c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 3; c.strokeRect(1.5, 1.5, sz - 3, sz - 3);
+      });
+      perf.repeat.set(2, D / 0.6);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1.2, D), new THREE.MeshStandardMaterial({ map: perf, roughness: 0.7 }));
+      m.rotation.x = -Math.PI / 2; m.position.set(g.aisleX, 0.004, D / 2); m.receiveShadow = true;
+      this.room.add(m);
+      // cool white light over the aisle
+      for (const fy of [0.25, 0.5, 0.75]) {
+        const l = new THREE.PointLight(0xdcecff, 0.9, 5);
+        l.position.set(g.aisleX, 2.2, D * fy);
+        this.room.add(l);
+      }
+    }
     const rm = plan.rooms;
     if (rm) {
       // rubber gym floor, carpet in the Switch and movie rooms (just above the planks)
@@ -372,7 +468,7 @@ export class Office3D extends window.Office {
       this.boxMesh(wx, -0.02, 0.83, 1.5, 0.1, 0.04, dark ? 0x2b2926 : 0xcfc5b3);
       cx = wx + 1.5;
     }
-    this.boxMesh(cx, -T, 0, W - cx, T, WALL_H, 0, { mat: wallMat });
+    this.boxMesh(cx, -T, 0, plan.W - cx, T, WALL_H, 0, { mat: wallMat });
     const dy = plan.door.y;
     this.boxMesh(-T, -T, 0, T, dy - 0.6 + T, WALL_H, 0, { mat: wallMat });
     this.boxMesh(-T, dy + 0.6, 0, T, D - dy - 0.6, WALL_H, 0, { mat: wallMat });
@@ -550,8 +646,19 @@ export class Office3D extends window.Office {
         this.place('laptop', p.x + 1.2, p.y + 0.45, 0.45, 0.35, { y0: 0.75 });
         break;
       case 'chair':
-        this.place('chairModernCushion', p.x - 0.28, p.y - 0.28, 0.56, 0.56, { h: 0.85, rot: p.face === 'front' ? 0 : Math.PI });
+        this.rollingChair(p.x, p.y, p.face);
         break;
+      case 'gpuRack':
+        this.gpuRack(p);
+        break;
+      case 'cableTray': {
+        // overhead tray with a yellow cable bundle, hung above the rack row
+        this.boxMesh(p.x + 0.1, p.y, 2.18, p.w - 0.2, p.d, 0.06, 0x9aa0a6, { metal: 0.6, rough: 0.4, shadow: false });
+        this.boxMesh(p.x + 0.3, p.y, 2.24, 0.16, p.d, 0.06, 0xe6c229, { rough: 0.6, shadow: false });
+        this.boxMesh(p.x + 0.55, p.y, 2.24, 0.12, p.d, 0.05, 0x2f6fb0, { rough: 0.6, shadow: false });
+        for (let y = p.y + 0.3; y < p.y + p.d; y += 1.5) this.boxMesh(p.x + p.w / 2 - 0.015, y, 2.24, 0.03, 0.03, WALL_H - 2.24, 0x8d939a, { metal: 0.6, shadow: false });
+        break;
+      }
       case 'counter': {
         const n = Math.max(1, Math.round(p.w / 0.7));
         const u = p.w / n;

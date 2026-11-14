@@ -48,6 +48,31 @@
     badge.image.src = badge.logo;
   }
   const PANTS = ['#34405a', '#2c2c34', '#4a3f35', '#3b4a3f'];
+  // Black-and-white outfit for anyone without a custom look: varied cuts
+  // (jacket, coat, plain top), tones and accessories, all monochrome.
+  const BW_DARK = ['#151517', '#1f1f22', '#2a2a2d'];
+  const BW_LIGHT = ['#f3f2ee', '#e9e8e3', '#dcdbd6'];
+  const BW_GREY = ['#8a8a8e', '#5e5e62'];
+  function bwLook(h) {
+    const style = pick([0, 1, 2, 3, 4], h, 21);
+    const dk = pick(BW_DARK, h, 22), lt = pick(BW_LIGHT, h, 23);
+    const L = {
+      skin: pick(SKIN, h, 3), hair: pick(['#1c1c1c', '#2a2019', '#3a3a3a', '#8c8c8c', '#1c1c1c'], h, 24),
+      hairStyle: pick(['short', 'long', 'bun', 'crop', 'slick'], h, 25),
+      jacket: [dk, lt, dk, pick(BW_GREY, h, 26), lt][style],
+      inner: [lt, dk, lt, lt, lt][style],
+      stitch: style === 1 || style === 4 ? '#bdbdb8' : '#3a3a3d',
+      pants: [dk, dk, dk, dk, lt][style] === lt && pick([0, 1], h, 27) ? dk : [dk, dk, dk, dk, lt][style],
+      shoes: pick(['#f5f5f2', '#121213'], h, 28),
+      coat: style === 2,
+      wide: !!pick([0, 1], h, 29),
+    };
+    if (L.shoes === '#f5f5f2' && pick([0, 1], h, 30)) L.shoeStripe = '#141414';
+    if (!pick([0, 1, 2, 3], h, 31)) L.glasses = '#111111';
+    if (!pick([0, 1, 2, 3, 4, 5], h, 32)) L.hat = pick(['#161617', '#ecebe6'], h, 33);
+    return L;
+  }
+
   // Named hairstyles a resident's "look" can ask for (4 = slicked back).
   const HAIR_STYLE = { short: 0, long: 1, bun: 2, crop: 3, slick: 4 };
   const PANEL = ['#7d93c4', '#d98b6a', '#7fb08a', '#c9a24c'];
@@ -60,7 +85,7 @@
   const ACT_EMOJI = {
     coffee: '☕', water: '💧', fridge: '🍎', sink: '🫧', stool: '💬', couch: '💬', beanbag: '🎧',
     window: '☁️', read: '📖', whiteboard: '✏️', meeting: '💬', arcade: '🎮', pingpong: '🏓', plant: '🌱',
-    vending: '🥤', foosball: '⚽', phone: '📞',
+    vending: '🥤', foosball: '⚽', phone: '📞', gpu: '⚡',
   };
 
   function hash(str) {
@@ -78,10 +103,11 @@
       dark: true,
       wood1: '#a8865f', wood2: '#a07f58', woodLine: 'rgba(70,45,20,.28)',
       paint1: '#c9c3b7', paint2: '#c5bfb3', paintSheen: 'rgba(255,255,255,.035)',
+      raised: '#9ea2a6', raisedPerf: '#7f8489', raisedLine: 'rgba(0,0,0,.18)', chairWhite: '#e9e9e6',
       walnut: '#5e412d', walnutL: '#4d3524', walnutR: '#3f2b1d', walnutGrain: 'rgba(20,10,4,.28)',
       leather: '#6a4027', leatherD: '#52311c', stud: '#c9a75e',
       gymFloor: '#2e3236', gameFloor: '#3c3550', movieFloor: '#3e2328',
-      tileA: '#3d4044', tileB: '#35383c', carpet: '#33404d', carpetLine: 'rgba(255,255,255,.04)',
+      tileA: '#bfb39f', tileB: '#b8ac98', carpet: '#33404d', carpetLine: 'rgba(255,255,255,.04)',
       wallL: '#4a4640', wallR: '#3f3b36', wallTop: '#5a554e', trim: '#2b2926',
       deskTop: '#8a6a4c', deskL: '#6e533b', deskR: '#5c4431',
       monitor: '#18181a', screenOff: '#26282c', chair: '#2d2d32',
@@ -94,10 +120,11 @@
       dark: false,
       wood1: '#ddbf92', wood2: '#d5b688', woodLine: 'rgba(120,80,40,.18)',
       paint1: '#f1ece2', paint2: '#ede7dc', paintSheen: 'rgba(255,255,255,.35)',
+      raised: '#d5d8db', raisedPerf: '#b7bbbf', raisedLine: 'rgba(0,0,0,.10)', chairWhite: '#fbfbf9',
       walnut: '#6e4c34', walnutL: '#5a3d29', walnutR: '#4a3221', walnutGrain: 'rgba(30,16,6,.22)',
       leather: '#7a4a2b', leatherD: '#5f3920', stud: '#d9b56a',
       gymFloor: '#6b727a', gameFloor: '#cfc6e0', movieFloor: '#8a4a52',
-      tileA: '#f4f4f1', tileB: '#e6e7e3', carpet: '#c9d3dc', carpetLine: 'rgba(0,0,0,.035)',
+      tileA: '#e8dcc6', tileB: '#e2d5be', carpet: '#c9d3dc', carpetLine: 'rgba(0,0,0,.035)',
       wallL: '#f4efe6', wallR: '#e8e1d4', wallTop: '#fbf8f2', trim: '#cfc5b3',
       deskTop: '#c89f72', deskL: '#a8825a', deskR: '#946f4b',
       monitor: '#2a2a2e', screenOff: '#3a3d44', chair: '#4a4a52',
@@ -288,7 +315,9 @@
       const FY = D - FS;
       const OD = FY;                               // open office depth (kept for callers)
       const RW = 7.2;                              // right column width
-      const W = OW + RW;
+      const RX = OW + RW;                          // right edge of meeting room / pantry / lounge
+      const GW = 5.6;                              // GPU compute room width
+      const W = RX + GW;
       const MR = 5.2;                              // meeting room depth
       const PY = 9.9;                              // pantry / lounge boundary
       const grid = new Grid(W, D);
@@ -474,7 +503,7 @@
       // ---- meeting room behind glass, door at y 3.6–4.6
       const mx = OW;
       for (const [y, d] of [[0, 1], [1, 1], [2, 1], [3, 0.6], [4.6, MR - 4.6]]) this.glassX(add, mx, y, d);
-      for (let x = mx; x < W - 0.01; x += 1) this.glassY(add, x, MR, Math.min(1, W - x));
+      for (let x = mx; x < RX - 0.01; x += 1) this.glassY(add, x, MR, Math.min(1, RX - x));
       prop('glass', { x: mx, y: 0, w: 0, d: 3.6 });
       prop('glass', { x: mx, y: 4.6, w: 0, d: MR - 4.6 });
       prop('glass', { x: mx, y: MR, w: RW, d: 0 });
@@ -487,17 +516,17 @@
       solid(mtx, mty, 3.0, 1.4);
       for (let k = 0; k < 3; k++) {
         const cx = mtx + 0.5 + k * 1.0;
-        add(cx + mty - 0.45, () => this.stool(cx, mty - 0.4, 0.4, '#555c66'));
-        add(cx + mty + 1.78, () => this.stool(cx, mty + 1.8, 0.4, '#555c66'));
+        add(cx + mty - 0.45, () => this.rollingChair(cx, mty - 0.4, 'front'));
+        add(cx + mty + 1.78, () => this.rollingChair(cx, mty + 1.8, 'back'));
         poi(cx, mty - 0.4, 'meeting', 'front', { sit: 0.42 });
         prop('chair', { x: cx, y: mty - 0.4, face: 'front' });
         prop('chair', { x: cx, y: mty + 1.8, face: 'back' });
         poi(cx, mty + 1.8, 'meeting', 'back', { sit: 0.42 });
       }
       poi(mx + 3.6, 0.65, 'whiteboard', 'back');
-      add(W - 0.45 + 0.45, () => this.plant(W - 0.45, 0.45));
-      prop('plant', { x: W - 0.45, y: 0.45 });
-      solid(W - 0.65, 0.25, 0.4, 0.4);
+      add(RX - 0.45 + 0.45, () => this.plant(RX - 0.45, 0.45));
+      prop('plant', { x: RX - 0.45, y: 0.45 });
+      solid(RX - 0.65, 0.25, 0.4, 0.4);
 
       // ---- pantry
       const cy = MR + 0.3;
@@ -506,17 +535,17 @@
       prop('counter', { x: mx + 1.0, y: cy, w: RW - 2.3, d: 0.7 });
       prop('coffee', { x: mx + 2.4, y: cy + 0.12 });
       prop('sink', { x: mx + 3.9, y: cy + 0.12 });
-      prop('fridge', { x: W - 1.15, y: cy });
+      prop('fridge', { x: RX - 1.15, y: cy });
       prop('cooler', { x: mx + 0.35, y: cy + 0.05 });
       add(mx + 2.65 + cy + 0.35, () => this.coffeeMachine(mx + 2.4, cy + 0.12));
       add(mx + 4.15 + cy + 0.35, () => this.sink(mx + 3.9, cy + 0.12));
-      add(W - 0.75 + cy + 0.4, () => this.fridge(W - 1.15, cy));
-      solid(W - 1.15, cy, 0.85, 0.75);
+      add(RX - 0.75 + cy + 0.4, () => this.fridge(RX - 1.15, cy));
+      solid(RX - 1.15, cy, 0.85, 0.75);
       add(mx + 0.55 + cy + 0.25, () => this.waterCooler(mx + 0.35, cy + 0.05));
       solid(mx + 0.3, cy, 0.5, 0.5);
       poi(mx + 2.65, cy + 1.2, 'coffee', 'back');
       poi(mx + 4.15, cy + 1.2, 'sink', 'back');
-      poi(W - 0.75, cy + 1.3, 'fridge', 'back');
+      poi(RX - 0.75, cy + 1.3, 'fridge', 'back');
       poi(mx + 0.6, cy + 0.95, 'water', 'back');
       const rtx = mx + 3.6, rty = MR + 2.9;
       add(rtx + rty, () => this.roundTable(rtx, rty));
@@ -551,22 +580,47 @@
       add(lx + 2.6 + ly + 3.6, () => this.beanbag(lx + 2.6, ly + 3.6, '#7d93c4'));
       poi(lx + 0.4, ly + 3.6, 'beanbag', 'front', { sit: 0.18 });
       poi(lx + 2.6, ly + 3.6, 'beanbag', 'front', { sit: 0.18 });
-      const ax = W - 1.2, ay = ly + 1.0;
+      const ax = RX - 1.2, ay = ly + 1.0;
       add(ax + 0.35 + ay + 0.35, () => this.arcade(ax, ay));
       prop('arcade', { x: ax, y: ay });
-      prop('plant', { x: W - 0.5, y: D - 0.5 });
+      prop('plant', { x: RX - 0.5, y: D - 0.5 });
       prop('lamp', { x: lx - 0.2, y: D - 0.6 });
       prop('rug', { x: OW + 0.3, y: PY + 0.6, w: 4.0, d: D - PY - 1.0 });
       solid(ax, ay, 0.7, 0.7);
       poi(ax + 0.35, ay + 1.15, 'arcade', 'back');
-      add(W - 0.5 + D - 0.5, () => this.plant(W - 0.5, D - 0.5));
+      add(RX - 0.5 + D - 0.5, () => this.plant(RX - 0.5, D - 0.5));
+
+      // ---- GPU compute room: glass wall with a door from the pantry side,
+      // two rows of GPU racks facing a cold aisle, cable trays overhead
+      const gdoor = MR + 1.2;                      // door 1 m wide
+      for (let y = 0; y < gdoor - 0.01; y += 1) this.glassX(add, RX, y, Math.min(1, gdoor - y));
+      for (let y = gdoor + 1.0; y < D - 0.01; y += 1) this.glassX(add, RX, y, Math.min(1, D - y));
+      prop('glass', { x: RX, y: 0, w: 0, d: gdoor });
+      prop('glass', { x: RX, y: gdoor + 1.0, w: 0, d: D - gdoor - 1.0 });
+      solid(RX - 0.05, 0, 0.1, gdoor, 0.05);
+      solid(RX - 0.05, gdoor + 1.0, 0.1, D - gdoor - 1.0, 0.05);
+      const rackW = 0.62, rackD = 1.0;
+      const rows = [{ x: RX + 0.45, face: 'e' }, { x: W - 0.45 - rackD, face: 'w' }];
+      const aisleX = (rows[0].x + rackD + rows[1].x) / 2;
+      const r0 = 0.5, r1 = D - 0.9;
+      const nRacks = Math.floor((r1 - r0) / rackW);
+      for (const row of rows) {
+        for (let k = 0; k < nRacks; k++) {
+          const ry = r0 + k * rackW;
+          add(row.x + rackD / 2 + ry + rackW / 2, () => this.gpuRack(row.x, ry, rackD, rackW, row.face, k));
+          prop('gpuRack', { x: row.x, y: ry, w: rackD, d: rackW, face: row.face, k });
+        }
+        solid(row.x, r0, rackD, nRacks * rackW);
+        prop('cableTray', { x: row.x, y: r0, w: rackD, d: nRacks * rackW });
+      }
+      for (let k = 1; k < 4; k++) poi(aisleX, r0 + (r1 - r0) * k / 4, 'gpu', k % 2 ? 'side' : 'back', { emoji: '⚡' });
       add(lx - 0.2 + D - 0.6, () => this.floorLamp(lx - 0.2, D - 0.6));
 
       const posters = [
         { y: SY + 3.45, color: '#8b6be6', text: 'GAME ON' },
       ];
       const rooms = { LW, GD, SY, CY, MY, OX, FY, tvY };
-      return { W, D, OW, OD, MR, PY, RW, grid, items, props, pois, desks, windows, posters, pp, rooms, door: { x: 0.4, y: CY + CW / 2 } };
+      return { W, D, OW, OD, MR, PY, RW, RX, gpu: { x: RX, w: GW, aisleX, door: gdoor }, grid, items, props, pois, desks, windows, posters, pp, rooms, door: { x: 0.4, y: CY + CW / 2 } };
     }
 
     glassX(add, x, y, d) {
@@ -658,8 +712,9 @@
     newPerson(s) {
       const h = hash(s.key);
       const door = this.plan.door;
-      // Optional custom outfit from the resident's team.json ("look").
-      const look = s.look && typeof s.look === 'object' ? s.look : null;
+      // Custom outfit from the resident's team.json ("look"); everyone else
+      // gets a black-and-white outfit picked from their hash.
+      const look = s.look && typeof s.look === 'object' ? s.look : bwLook(h);
       const lk = (k, fb) => (look && typeof look[k] === 'string' && /^#[0-9a-f]{3,8}$/i.test(look[k]) ? look[k] : fb);
       return {
         key: s.key, h, s, look,
@@ -833,7 +888,8 @@
     // ------------------------------------------------------------ room shell
 
     drawRoom() {
-      const { W, D, OW, MR, PY, pp } = this.plan;
+      const { D, OW, MR, PY, pp } = this.plan;
+      const W = this.plan.RX || this.plan.W; // right column ends here; the GPU room follows
       const pal = this.pal;
       const P = (x, y, z) => this.iso(x, y, z);
       const t = this.t / 1000;
@@ -879,10 +935,23 @@
       this.poly([P(pp.x0 - 0.6, pp.y - 1.4), P(pp.x1 + 0.6, pp.y - 1.4), P(pp.x1 + 0.6, pp.y + 1.3), P(pp.x0 - 0.6, pp.y + 1.3)], pal.mat);
 
       // walls
-      this.poly([P(0, 0, 0), P(W, 0, 0), P(W, 0, WALL_H), P(0, 0, WALL_H)], pal.wallL);
+      const g = this.plan.gpu;
+      if (g) {
+        // raised floor: light grey panels, perforated tiles along the aisle
+        const WW = g.x + g.w;
+        for (let x = g.x; x < WW - 0.01; x += 0.6) {
+          for (let y = 0; y < D - 0.01; y += 0.6) {
+            const x1 = Math.min(WW, x + 0.6), y1 = Math.min(D, y + 0.6);
+            const perf = Math.abs(x + 0.3 - g.aisleX) < 0.6;
+            this.poly([P(x, y), P(x1, y), P(x1, y1), P(x, y1)], perf ? pal.raisedPerf : pal.raised, pal.raisedLine);
+          }
+        }
+      }
+      const WT = this.plan.W; // the back wall runs past the GPU room
+      this.poly([P(0, 0, 0), P(WT, 0, 0), P(WT, 0, WALL_H), P(0, 0, WALL_H)], pal.wallL);
       this.poly([P(0, 0, 0), P(0, D, 0), P(0, D, WALL_H), P(0, 0, WALL_H)], pal.wallR);
-      this.poly([P(0, 0, WALL_H), P(W, 0, WALL_H), P(W, -0.15, WALL_H), P(-0.15, -0.15, WALL_H), P(-0.15, D, WALL_H), P(0, D, WALL_H)], pal.wallTop);
-      this.poly([P(0, 0, 0), P(W, 0, 0), P(W, 0, 0.12), P(0, 0, 0.12)], pal.trim);
+      this.poly([P(0, 0, WALL_H), P(WT, 0, WALL_H), P(WT, -0.15, WALL_H), P(-0.15, -0.15, WALL_H), P(-0.15, D, WALL_H), P(0, D, WALL_H)], pal.wallTop);
+      this.poly([P(0, 0, 0), P(WT, 0, 0), P(WT, 0, 0.12), P(0, 0, 0.12)], pal.trim);
       this.poly([P(0, 0, 0), P(0, D, 0), P(0, D, 0.12), P(0, 0, 0.12)], pal.trim);
 
       // windows with the real sky outside
@@ -971,6 +1040,68 @@
       }
       c.fillStyle = this.shade(pal.plant, 22);
       c.beginPath(); c.ellipse(b.x, b.y - 20, 5, 10, sway, 0, Math.PI * 2); c.fill();
+    }
+
+    // A rack packed with GPU servers. face 'e': front (GPU sleds) toward +x;
+    // 'w': front toward -x, so the visible +x side is the back (cables).
+    gpuRack(x, y, w, d, face, k) {
+      const H = 2.05;
+      this.box(x, y, 0, w, d, H, '#2a2c30', '#1b1c1f', '#202226');
+      const P = (a, b, c) => this.iso(a, b, c);
+      const fx = x + w + 0.002;
+      const quad = (y0, y1, z0, z1, col) => this.poly([P(fx, y0, z0), P(fx, y1, z0), P(fx, y1, z1), P(fx, y0, z1)], col);
+      const t = this.t / 1000;
+      const y0 = y + 0.05, y1 = y + d - 0.05;
+      if (face === 'e') {
+        quad(y0, y1, 0.08, H - 0.08, '#0c0d0f');
+        const n = 8;
+        for (let i = 0; i < n; i++) {
+          const z0 = 0.14 + i * ((H - 0.3) / n), z1 = z0 + (H - 0.3) / n - 0.035;
+          quad(y0 + 0.02, y1 - 0.02, z0, z1, '#17191c');
+          // cool-blue light line across each GPU sled
+          const glow = 0.55 + 0.45 * Math.sin(t * 1.3 + i * 0.7 + k);
+          quad(y0 + 0.06, y1 - 0.06, (z0 + z1) / 2 - 0.01, (z0 + z1) / 2 + 0.01, `rgba(80,190,255,${0.45 + glow * 0.45})`);
+          // status LEDs
+          for (let j = 0; j < 4; j++) {
+            const on = Math.sin(t * (3 + j) + i * 1.7 + k * 2.3 + j) > -0.3;
+            const ly = y0 + 0.06 + j * 0.05;
+            quad(ly, ly + 0.025, z0 + 0.03, z0 + 0.055, on ? '#52f08a' : '#1d3a27');
+          }
+        }
+      } else {
+        // rear: cable bundles with silver connectors
+        quad(y0, y1, 0.08, H - 0.08, '#101113');
+        for (let j = 0; j < 5; j++) {
+          const cy = y0 + 0.06 + j * ((y1 - y0 - 0.12) / 4);
+          quad(cy - 0.015, cy + 0.015, 0.1, H - 0.1, j % 2 ? '#0a0a0b' : '#1a1c20');
+          for (let i = 0; i < 6; i++) {
+            const z = 0.25 + i * 0.3;
+            quad(cy - 0.022, cy + 0.022, z, z + 0.05, '#b9bfc6');
+          }
+        }
+        const blink = Math.sin(t * 4 + k) > 0;
+        quad(y0 + 0.02, y0 + 0.05, H - 0.2, H - 0.17, blink ? '#3b8ee0' : '#16324f');
+      }
+    }
+
+    // White rolling office chair (meeting room).
+    rollingChair(x, y, face) {
+      const c = this.ctx, pal = this.pal;
+      const base = this.iso(x, y, 0.02);
+      c.strokeStyle = '#3a3d42'; c.lineWidth = 1.6;
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2 + 0.3;
+        const e = this.iso(x + Math.cos(a) * 0.24, y + Math.sin(a) * 0.24, 0.02);
+        c.beginPath(); c.moveTo(base.x, base.y); c.lineTo(e.x, e.y); c.stroke();
+        c.fillStyle = '#1e1f22'; c.beginPath(); c.arc(e.x, e.y + 1, 1.6, 0, Math.PI * 2); c.fill();
+      }
+      const top = this.iso(x, y, 0.38);
+      c.strokeStyle = '#8d939a'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(base.x, base.y); c.lineTo(top.x, top.y); c.stroke();
+      const w = pal.chairWhite;
+      this.box(x - 0.22, y - 0.22, 0.38, 0.44, 0.44, 0.07, w, this.shade(w, -22), this.shade(w, -34));
+      if (face === 'front') this.box(x - 0.22, y - 0.27, 0.45, 0.44, 0.06, 0.5, w, this.shade(w, -22), this.shade(w, -34));
+      else this.box(x - 0.22, y + 0.21, 0.45, 0.44, 0.06, 0.5, w, this.shade(w, -22), this.shade(w, -34));
     }
 
     serverRack(x, y) {

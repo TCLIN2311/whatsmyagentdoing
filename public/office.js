@@ -650,11 +650,14 @@
     newPerson(s) {
       const h = hash(s.key);
       const door = this.plan.door;
+      // Optional custom outfit from the resident's team.json ("look").
+      const look = s.look && typeof s.look === 'object' ? s.look : null;
+      const lk = (k, fb) => (look && typeof look[k] === 'string' && /^#[0-9a-f]{3,8}$/i.test(look[k]) ? look[k] : fb);
       return {
-        key: s.key, h, s,
-        skin: pick(SKIN, h, 3), hair: pick(HAIR, h, 7), pants: pick(PANTS, h, 13),
-        shirt: pick(SHIRT[s.agent] || SHIRT.claude, h, 11),
-        hairStyle: h % 4,
+        key: s.key, h, s, look,
+        skin: lk('skin', pick(SKIN, h, 3)), hair: lk('hair', pick(HAIR, h, 7)), pants: lk('pants', pick(PANTS, h, 13)),
+        shirt: lk('jacket', pick(SHIRT[s.agent] || SHIRT.claude, h, 11)),
+        hairStyle: look && look.hairStyle === 'slick' ? 4 : h % 4,
         phase: (h % 1000) / 1000 * Math.PI * 2,
         x: door.x, y: door.y,
         path: [], walkFace: 'front', until: 0, mode: null,
@@ -1400,19 +1403,46 @@
       c.translate(x, y);
       c.scale(sc, sc);
 
+      const lk = p.look || {};
+      const wide = !!lk.wide;
+      const lw = wide ? 5 : 4; // wide-leg trousers
+      const lx0 = wide ? -6 : -5;
       c.fillStyle = p.pants;
       if (seated) {
-        c.fillRect(-5, -4, 4, 5);
-        c.fillRect(1, -4, 4, 5);
+        c.fillRect(lx0, -4, lw, 5);
+        c.fillRect(1, -4, lw, 5);
       } else {
-        c.fillRect(-5, -10, 4, 10 + step * 2);
-        c.fillRect(1, -10, 4, 10 - step * 2);
-        c.fillStyle = '#2a2a2a';
-        c.fillRect(-5, -1 + step, 4, 2);
-        c.fillRect(1, -1 - step, 4, 2);
+        c.fillRect(lx0, -10, lw, 10 + step * 2);
+        c.fillRect(1, -10, lw, 10 - step * 2);
+        c.fillStyle = lk.shoes || '#2a2a2a';
+        c.fillRect(lx0, -1 + step, lw, 2);
+        c.fillRect(1, -1 - step, lw, 2);
+        if (lk.shoeStripe) {
+          c.fillStyle = lk.shoeStripe;
+          c.fillRect(lx0 + 1, -0.6 + step, lw - 2, 0.8);
+          c.fillRect(2, -0.6 - step, lw - 2, 0.8);
+        }
       }
       const hip = seated ? -4 : -10;
-      this.roundRect(-7, hip - 13, 14, 14, 3, p.shirt);
+      if (p.look) {
+        // Oversized, boxy jacket worn open over a tee, with contrast stitching.
+        this.roundRect(-8, hip - 13, 16, 15, 3, p.shirt);
+        if (front) {
+          if (lk.inner) { c.fillStyle = lk.inner; c.fillRect(-2, hip - 13, 4, 15); }
+          if (lk.stitch) {
+            c.strokeStyle = lk.stitch; c.lineWidth = 0.6;
+            c.strokeRect(-6.5, hip - 10.5, 3.6, 3); // chest pockets
+            c.strokeRect(2.9, hip - 10.5, 3.6, 3);
+            c.beginPath();
+            c.moveTo(-2.6, hip - 12.5); c.lineTo(-2.6, hip + 1.5);
+            c.moveTo(2.6, hip - 12.5); c.lineTo(2.6, hip + 1.5);
+            c.moveTo(-7.5, hip + 0.6); c.lineTo(7.5, hip + 0.6);
+            c.stroke();
+          }
+        }
+      } else {
+        this.roundRect(-7, hip - 13, 14, 14, 3, p.shirt);
+      }
       const arm = this.shade(p.shirt, -18);
       const hand = (hx, hy) => { c.fillStyle = p.skin; c.beginPath(); c.arc(hx, hy, 2.2, 0, Math.PI * 2); c.fill(); };
       c.fillStyle = arm;
@@ -1495,11 +1525,29 @@
         c.beginPath(); c.arc(0, hy - 1.5, 7.3, Math.PI * 1.05, Math.PI * 1.95); c.fill();
         if (p.hairStyle === 1) { c.fillRect(-7.3, hy - 2, 2.5, 8); c.fillRect(4.8, hy - 2, 2.5, 8); }
         if (p.hairStyle === 2) { c.beginPath(); c.arc(0, hy - 8, 3.2, 0, Math.PI * 2); c.fill(); }
+        if (p.hairStyle === 4) { // slicked back with volume on top
+          c.beginPath(); c.ellipse(0.5, hy - 6.3, 6.4, 2.8, -0.08, Math.PI, Math.PI * 2); c.fill();
+        }
+        if (lk.beard) {
+          c.globalAlpha = 0.55; // short beard along the jaw
+          c.beginPath(); c.arc(0, hy + 0.5, 6.8, 0.18 * Math.PI, 0.82 * Math.PI); c.arc(0, hy + 1.6, 4.6, 0.78 * Math.PI, 0.22 * Math.PI, true); c.fill();
+          c.globalAlpha = 0.75; c.fillRect(-2.2, hy + 2.6, 4.4, 0.9); // moustache
+          c.globalAlpha = 1;
+        }
         c.fillStyle = '#2a2018';
         const sleepy = s.status === 'idle';
         const blink = Math.sin(t * 0.7 + p.phase * 3) > 0.985;
-        c.fillRect(-3, hy - 0.5, 1.6, blink || sleepy ? 0.7 : 2);
-        c.fillRect(1.6, hy - 0.5, 1.6, blink || sleepy ? 0.7 : 2);
+        if (lk.sunglasses) {
+          c.fillStyle = lk.lens || '#6b4a2a';
+          c.beginPath(); c.arc(-2.4, hy + 0.2, 2.1, 0, Math.PI * 2); c.arc(2.4, hy + 0.2, 2.1, 0, Math.PI * 2); c.fill();
+          c.strokeStyle = lk.sunglasses; c.lineWidth = 0.9;
+          c.beginPath(); c.arc(-2.4, hy + 0.2, 2.1, 0, Math.PI * 2); c.stroke();
+          c.beginPath(); c.arc(2.4, hy + 0.2, 2.1, 0, Math.PI * 2); c.stroke();
+          c.beginPath(); c.moveTo(-0.4, hy - 0.4); c.lineTo(0.4, hy - 0.4); c.stroke();
+        } else {
+          c.fillRect(-3, hy - 0.5, 1.6, blink || sleepy ? 0.7 : 2);
+          c.fillRect(1.6, hy - 0.5, 1.6, blink || sleepy ? 0.7 : 2);
+        }
         c.strokeStyle = '#2a2018'; c.lineWidth = 1;
         if (p.mode === 'wander' && !sleepy) {
           c.beginPath(); c.arc(0, hy + 2.2, 2, 0.15 * Math.PI, 0.85 * Math.PI); c.stroke();

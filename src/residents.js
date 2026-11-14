@@ -7,7 +7,8 @@
 //
 // Name tag and role come from an optional team.json next to the agent file
 // (<dir of the real .md>/<name>/team.json: { "title", "role" }), otherwise
-// from the agent's frontmatter.
+// from the agent's frontmatter. An optional "look" object in team.json gives
+// the resident a custom outfit in the 2D office (see public/office.js newPerson).
 
 const fs = require('fs');
 const os = require('os');
@@ -56,6 +57,7 @@ function residents() {
       name,
       label: t.title || name,
       role: t.role || (fm.description || '').split(/[。.]/)[0].slice(0, 80),
+      look: t.look && typeof t.look === 'object' ? t.look : null,
       startedAt: stamp(path.join(AGENTS_DIR, f)),
     });
   }
@@ -90,6 +92,7 @@ function apply(sessions, raw, now, opts = {}) {
     v.project = r.label;
     v.residentOf = r.name;
     v.residentLabel = r.label;
+    if (r.look) v.look = r.look;
   }
   // Sort residents ahead of recently finished sessions so they never "go home";
   // use the newest event time rather than now so idle ticks don't push updates.
@@ -106,6 +109,7 @@ function apply(sessions, raw, now, opts = {}) {
       resident: true,
       residentOf: r.name,
       residentLabel: r.label,
+      look: r.look,
       cwd: null,
       project: r.label,
       title: opts.privacy ? null : `常駐成員：${r.role}`,

@@ -446,9 +446,11 @@ export class Office3D extends window.Office {
       this.room.add(gym);
     }
     const pp = plan.pp;
-    const mat = new THREE.Mesh(new THREE.PlaneGeometry(pp.x1 - pp.x0 + 1.2, 2.7), new THREE.MeshStandardMaterial({ color: dark ? 0x2f4a3a : 0xbfd8c4, roughness: 1 }));
-    mat.rotation.x = -Math.PI / 2; mat.position.set((pp.x0 + pp.x1) / 2, 0.005, pp.y - 0.05); mat.receiveShadow = true;
-    this.room.add(mat);
+    if (pp) {
+      const mat = new THREE.Mesh(new THREE.PlaneGeometry(pp.x1 - pp.x0 + 1.2, 2.7), new THREE.MeshStandardMaterial({ color: dark ? 0x2f4a3a : 0xbfd8c4, roughness: 1 }));
+      mat.rotation.x = -Math.PI / 2; mat.position.set((pp.x0 + pp.x1) / 2, 0.005, pp.y - 0.05); mat.receiveShadow = true;
+      this.room.add(mat);
+    }
 
     // walls: back (z=0) with windows, left (x=0) with a door
     const wallCol = dark ? 0x4a4640 : 0xf4efe6;
@@ -651,6 +653,101 @@ export class Office3D extends window.Office {
       case 'gpuRack':
         this.gpuRack(p);
         break;
+
+      // ---- press area
+      case 'pressBackdrop': {
+        const w = p.x1 - p.x0, h = 2.15;
+        const tex = this.patternTexture((c, sz) => {
+          c.fillStyle = '#f6f5f1'; c.fillRect(0, 0, sz * 2, sz);
+          c.font = '800 9px ui-sans-serif, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+          for (let r = 0; r < 4; r++) {
+            for (let k = 0; k < 4; k++) {
+              const x = (k + 0.5 + (r % 2) * 0.5) * (sz / 4), y = (r + 0.5) * (sz / 4);
+              if ((k + r) % 2) { c.fillStyle = '#1c1c1e'; c.fillText('AGENT OFFICE', x % sz, y); }
+              else {
+                c.strokeStyle = '#c96442'; c.lineWidth = 4; c.lineCap = 'round';
+                for (let i = 0; i < 4; i++) { const a = (i / 4) * Math.PI; c.beginPath(); c.moveTo(x + Math.cos(a) * 11, y + Math.sin(a) * 11); c.lineTo(x - Math.cos(a) * 11, y - Math.sin(a) * 11); c.stroke(); }
+              }
+            }
+          }
+        }, 256);
+        tex.repeat.set(w / 1.6, h / 1.6);
+        const banner = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
+        banner.position.set(p.x0 + w / 2, 0.1 + h / 2, 0.02);
+        this.room.add(banner);
+        const frame = this._frameMat || (this._frameMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.5, metalness: 0.4 }));
+        this.boxMesh(p.x0 - 0.04, 0, 0, 0.04, 0.06, h + 0.15, 0, { mat: frame });
+        this.boxMesh(p.x1, 0, 0, 0.04, 0.06, h + 0.15, 0, { mat: frame });
+        this.boxMesh(p.x0 - 0.04, 0, h + 0.1, w + 0.08, 0.06, 0.05, 0, { mat: frame });
+        this.boxMesh(p.x0, 0, 0, w, 0.06, 0.1, 0, { mat: frame });
+        break;
+      }
+      case 'pressCarpet': {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(p.w, p.d), new THREE.MeshStandardMaterial({ color: 0x26272b, roughness: 1 }));
+        m.rotation.x = -Math.PI / 2; m.position.set(p.x + p.w / 2, 0.006, p.y + p.d / 2); m.receiveShadow = true;
+        this.room.add(m);
+        break;
+      }
+      case 'podium': {
+        const wal = this.walnutMat();
+        this.boxMesh(p.x, p.y, 0, 0.7, 0.5, 1.05, 0, { mat: wal });
+        this.boxMesh(p.x - 0.05, p.y - 0.05, 1.05, 0.8, 0.6, 0.05, 0, { mat: wal });
+        const plate = this.boxMesh(p.x + 0.2, p.y + 0.5, 0.55, 0.3, 0.005, 0.25, 0xf6f5f1, { rough: 0.6, shadow: false });
+        void plate;
+        const black = this._chairBlack || (this._chairBlack = new THREE.MeshStandardMaterial({ color: 0x1e1f22, roughness: 0.6 }));
+        for (const dx of [0.25, 0.45]) {
+          const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.32, 6), black);
+          neck.position.set(p.x + dx, 1.25, p.y + 0.32); neck.rotation.x = 0.5; this.room.add(neck);
+          const mic = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), black);
+          mic.position.set(p.x + dx, 1.4, p.y + 0.42); this.room.add(mic);
+        }
+        break;
+      }
+      case 'softbox': {
+        const g = new THREE.Group();
+        const metal = this._frameMat || (this._frameMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.5, metalness: 0.4 }));
+        for (let i = 0; i < 3; i++) {
+          const a = (i / 3) * Math.PI * 2;
+          const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.5, 6), metal);
+          leg.position.set(Math.cos(a) * 0.14, 0.22, Math.sin(a) * 0.14); leg.rotation.set(Math.sin(a) * 0.55, 0, -Math.cos(a) * 0.55); g.add(leg);
+        }
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 1.5, 8), metal);
+        pole.position.y = 1.15; g.add(pole);
+        const head = new THREE.Group();
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.3), metal);
+        const face = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.41), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff6e6, emissiveIntensity: 1.2 }));
+        face.position.z = -0.152; face.rotation.y = Math.PI;
+        head.add(box, face);
+        head.position.y = 1.95;
+        head.rotation.y = p.side > 0 ? -0.6 : 0.6; // aimed back toward the backdrop
+        g.add(head);
+        g.position.set(p.x + 0.15, 0, p.y + 0.15);
+        g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+        this.room.add(g);
+        const l = new THREE.PointLight(0xfff3e0, 0.9, 4);
+        l.position.set(p.x + 0.15 + (p.side > 0 ? 0.3 : -0.3), 1.9, p.y - 0.3);
+        this.room.add(l);
+        break;
+      }
+      case 'tripodCamera': {
+        const g = new THREE.Group();
+        const metal = this._frameMat || (this._frameMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.5, metalness: 0.4 }));
+        for (let i = 0; i < 3; i++) {
+          const a = (i / 3) * Math.PI * 2 + 0.5;
+          const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.25, 6), metal);
+          leg.position.set(Math.cos(a) * 0.17, 0.6, Math.sin(a) * 0.17); leg.rotation.set(Math.sin(a) * 0.28, 0, -Math.cos(a) * 0.28); g.add(leg);
+        }
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.42), new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.5, metalness: 0.3 }));
+        body.position.y = 1.32; g.add(body);
+        const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.18, 14), new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.25, metalness: 0.5 }));
+        lens.rotation.x = Math.PI / 2; lens.position.set(0, 1.32, -0.29); g.add(lens);
+        this.recLed = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 6), new THREE.MeshStandardMaterial({ color: 0x330000, emissive: 0xff3b30, emissiveIntensity: 1 }));
+        this.recLed.position.set(0.08, 1.46, 0.1); g.add(this.recLed);
+        g.position.set(p.x + 0.2, 0, p.y + 0.2);
+        g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+        this.room.add(g);
+        break;
+      }
       case 'cableTray': {
         // overhead tray with a yellow cable bundle, hung above the rack row
         this.boxMesh(p.x + 0.1, p.y, 2.18, p.w - 0.2, p.d, 0.06, 0x9aa0a6, { metal: 0.6, rough: 0.4, shadow: false });
@@ -1508,6 +1605,7 @@ export class Office3D extends window.Office {
         walk: 'walk', wave: 'emote-yes', coffee: 'holding-right', water: 'holding-right', read: 'holding-both',
         phone: 'holding-right', arcade: 'interact-right', whiteboard: 'interact-right', foosball: 'interact-left',
         pingpong: 'interact-right', vending: 'interact-right', fridge: 'interact-left', sink: 'interact-right',
+        camera: 'holding-right',
       }[st.pose === 'walk' ? 'walk' : st.act] || (st.pose === 'sit' ? 'sit' : 'idle');
       let chosen = anim;
       if (st.act === 'station') chosen = p.s.status === 'thinking' ? 'idle' : (p.desk.anim || 'interact-right');
@@ -1669,6 +1767,7 @@ export class Office3D extends window.Office {
     const fbPlaying = this.plan.pois.filter((q) => q.pair === 'fb' && q.taken).length === 2;
     if (this.rods) this.rods.forEach((r, k) => { r.position.z = this.plan.props.find((q) => q.t === 'foosball').y + 0.4 + (fbPlaying ? Math.sin(t * 8 + k) * 0.06 : 0); r.rotation.z = fbPlaying ? Math.sin(t * 12 + k) * 0.6 : 0; });
     this.updateBall();
+    if (this.recLed) this.recLed.material.emissiveIntensity = Math.sin(t * 3) > 0 ? 1.4 : 0.1;
 
     this.syncActors(dt);
     if (this.insetMoving() || this.insetSettling) { this.fitCamera3D(false); this.insetSettling = this.insetMoving(); }

@@ -85,7 +85,7 @@
   const ACT_EMOJI = {
     coffee: '☕', water: '💧', fridge: '🍎', sink: '🫧', stool: '💬', couch: '💬', beanbag: '🎧',
     window: '☁️', read: '📖', whiteboard: '✏️', meeting: '💬', arcade: '🎮', pingpong: '🏓', plant: '🌱',
-    vending: '🥤', foosball: '⚽', phone: '📞', gpu: '⚡',
+    vending: '🥤', foosball: '⚽', phone: '📞', gpu: '⚡', interview: '🎤', camera: '🎥',
   };
 
   function hash(str) {
@@ -376,27 +376,36 @@
       solid(OW - 2.3, 0.25, 0.75, 0.55);
       for (const [x, y] of [[OX + 0.45, 0.45], [OX + 0.45, FY - 0.4]]) { add(x + y, () => this.plant(x, y)); prop('plant', { x, y }); solid(x - 0.2, y - 0.2, 0.4, 0.4); }
       const windows = [0.9, 3.5]; // gym
+      const press = { x0: OX + 1.5, x1: OX + 6.7, y0: 0, y1: TS - 0.2 }; // press backdrop on the back wall
       for (let x = OX + 1.0; x < OW - 2.6; x += 2.4) {
+        if (x + 1.5 > press.x0 - 0.1 && x < press.x1 + 0.1) continue; // no window behind the backdrop
         windows.push(x);
         poi(x + 0.75, 0.75, 'window', 'back');
       }
       poi(OX + 0.95, FY - 0.4, 'plant', 'back');
 
-      // ---- games strip along the back wall: ping-pong and foosball
-      const tx = OX + 1.4, ty = 1.0;
-      add(tx + 1.3 + ty + 0.7, () => this.pingpong(tx, ty));
-      prop('pingpong', { x: tx, y: ty });
-      solid(tx, ty, 2.6, 1.4, 0.05);
-      poi(tx - 0.55, ty + 0.7, 'pingpong', 'side', { pair: 'pp' });
-      poi(tx + 3.15, ty + 0.7, 'pingpong', 'side', { pair: 'pp' });
-      const pp = { x0: tx - 0.2, x1: tx + 2.8, y: ty + 0.7 };
+      // ---- press area along the back wall: step-and-repeat backdrop,
+      // a podium with microphones, two softbox lights and a camera on a tripod
+      const pp = null; // (was the ping-pong table)
       {
-        const fx = OX + 5.6, fby = 1.3;
-        add(fx + 0.8 + fby + 0.4, () => this.foosball(fx, fby));
-        prop('foosball', { x: fx, y: fby });
-        solid(fx, fby, 1.6, 0.8, 0.05);
-        poi(fx - 0.45, fby + 0.4, 'foosball', 'side', { pair: 'fb' });
-        poi(fx + 2.05, fby + 0.4, 'foosball', 'side', { pair: 'fb' });
+        const cx = (press.x0 + press.x1) / 2;
+        prop('pressBackdrop', { x0: press.x0, x1: press.x1 });
+        prop('pressCarpet', { x: press.x0 + 0.3, y: 0.25, w: press.x1 - press.x0 - 0.6, d: 2.0 });
+        add(cx + 1.25, () => this.podium(cx - 0.35, 0.95));
+        prop('podium', { x: cx - 0.35, y: 0.95 });
+        solid(cx - 0.35, 0.95, 0.7, 0.5, 0.05);
+        poi(cx, 0.6, 'interview', 'front', { emoji: '🎤', anim: 'interact-right' });
+        poi(press.x0 + 0.9, 0.75, 'interview', 'front', { emoji: '🎤' });
+        poi(press.x1 - 0.9, 0.75, 'interview', 'front', { emoji: '🎤' });
+        for (const lx of [press.x0 + 0.35, press.x1 - 0.65]) {
+          add(lx + 0.15 + 1.95, () => this.softbox(lx, 1.8, lx < cx ? 1 : -1));
+          prop('softbox', { x: lx, y: 1.8, side: lx < cx ? 1 : -1 });
+          solid(lx, 1.8, 0.3, 0.3, 0.05);
+        }
+        add(cx + 0.2 + 2.75, () => this.tripodCamera(cx - 0.2, 2.55));
+        prop('tripodCamera', { x: cx - 0.2, y: 2.55 });
+        solid(cx - 0.2, 2.55, 0.4, 0.4, 0.05);
+        poi(cx + 0.55, 2.85, 'camera', 'back', { emoji: '🎥', anim: 'holding-right' });
       }
 
       // ---- front strip: vending machines and the phone booth
@@ -620,7 +629,7 @@
         { y: SY + 3.45, color: '#8b6be6', text: 'GAME ON' },
       ];
       const rooms = { LW, GD, SY, CY, MY, OX, FY, tvY };
-      return { W, D, OW, OD, MR, PY, RW, RX, gpu: { x: RX, w: GW, aisleX, door: gdoor }, grid, items, props, pois, desks, windows, posters, pp, rooms, door: { x: 0.4, y: CY + CW / 2 } };
+      return { press, W, D, OW, OD, MR, PY, RW, RX, gpu: { x: RX, w: GW, aisleX, door: gdoor }, grid, items, props, pois, desks, windows, posters, pp, rooms, door: { x: 0.4, y: CY + CW / 2 } };
     }
 
     glassX(add, x, y, d) {
@@ -932,7 +941,9 @@
       }
       this.poly([P(OW + 0.3, PY + 0.6), P(OW + 4.3, PY + 0.6), P(OW + 4.3, D - 0.4), P(OW + 0.3, D - 0.4)], pal.rug);
       this.poly([P(OW + 0.5, PY + 0.8), P(OW + 4.1, PY + 0.8), P(OW + 4.1, D - 0.6), P(OW + 0.5, D - 0.6)], null, pal.rugEdge);
-      this.poly([P(pp.x0 - 0.6, pp.y - 1.4), P(pp.x1 + 0.6, pp.y - 1.4), P(pp.x1 + 0.6, pp.y + 1.3), P(pp.x0 - 0.6, pp.y + 1.3)], pal.mat);
+      if (pp) this.poly([P(pp.x0 - 0.6, pp.y - 1.4), P(pp.x1 + 0.6, pp.y - 1.4), P(pp.x1 + 0.6, pp.y + 1.3), P(pp.x0 - 0.6, pp.y + 1.3)], pal.mat);
+      const pr = this.plan.press;
+      if (pr) this.poly([P(pr.x0 + 0.3, 0.25), P(pr.x1 - 0.3, 0.25), P(pr.x1 - 0.3, 2.25), P(pr.x0 + 0.3, 2.25)], '#26272b', '#3a3b40');
 
       // walls
       const g = this.plan.gpu;
@@ -953,6 +964,28 @@
       this.poly([P(0, 0, WALL_H), P(WT, 0, WALL_H), P(WT, -0.15, WALL_H), P(-0.15, -0.15, WALL_H), P(-0.15, D, WALL_H), P(0, D, WALL_H)], pal.wallTop);
       this.poly([P(0, 0, 0), P(WT, 0, 0), P(WT, 0, 0.12), P(0, 0, 0.12)], pal.trim);
       this.poly([P(0, 0, 0), P(0, D, 0), P(0, D, 0.12), P(0, 0, 0.12)], pal.trim);
+
+      // press backdrop: step-and-repeat banner mounted on the back wall
+      if (this.plan.press) {
+        const { x0, x1 } = this.plan.press;
+        this.poly([P(x0, 0.02, 0.1), P(x1, 0.02, 0.1), P(x1, 0.02, 2.25), P(x0, 0.02, 2.25)], '#f6f5f1', '#1c1c1e');
+        this.poly([P(x0, 0.03, 0.1), P(x1, 0.03, 0.1), P(x1, 0.03, 0.2), P(x0, 0.03, 0.2)], '#1c1c1e');
+        let r = 0;
+        for (let z = 2.0; z > 0.35; z -= 0.36, r++) {
+          for (let x = x0 + 0.3 + (r % 2) * 0.4; x < x1 - 0.2; x += 0.8) {
+            const star = (Math.round((x - x0) / 0.8) + r) % 2 === 0;
+            this.onWall('y0', x, z, (c) => {
+              if (star) {
+                c.strokeStyle = '#c96442'; c.lineWidth = 1.6; c.lineCap = 'round';
+                for (let i = 0; i < 4; i++) { const a = (i / 4) * Math.PI; c.beginPath(); c.moveTo(Math.cos(a) * 4, Math.sin(a) * 4); c.lineTo(-Math.cos(a) * 4, -Math.sin(a) * 4); c.stroke(); }
+              } else {
+                c.font = '800 4.5px ui-sans-serif, system-ui, sans-serif'; c.fillStyle = '#1c1c1e'; c.textAlign = 'center'; c.textBaseline = 'middle';
+                c.fillText('AGENT OFFICE', 0, 0);
+              }
+            });
+          }
+        }
+      }
 
       // windows with the real sky outside
       const sky = skyColor();
@@ -1131,6 +1164,53 @@
       const P = (a, b, c) => this.iso(a, b, c);
       this.poly([P(x + 0.04, y + 0.69, 0.765), P(x + 2.56, y + 0.69, 0.765), P(x + 2.56, y + 0.71, 0.765), P(x + 0.04, y + 0.71, 0.765)], '#ffffff');
       this.poly([P(x + 1.3, y - 0.05, 0.76), P(x + 1.3, y + 1.45, 0.76), P(x + 1.3, y + 1.45, 0.95), P(x + 1.3, y - 0.05, 0.95)], 'rgba(255,255,255,.55)', '#ddd');
+    }
+
+    // Lectern with two microphones on goosenecks and a logo plate.
+    podium(x, y) {
+      const pal = this.pal;
+      this.box(x, y, 0, 0.7, 0.5, 1.05, pal.walnut, pal.walnutL, pal.walnutR);
+      this.box(x - 0.05, y - 0.05, 1.05, 0.8, 0.6, 0.05, this.shade(pal.walnut, 12), pal.walnutL, pal.walnutR);
+      const P = (a, b, c) => this.iso(a, b, c);
+      this.poly([P(x + 0.2, y + 0.5, 0.55), P(x + 0.5, y + 0.5, 0.55), P(x + 0.5, y + 0.5, 0.8), P(x + 0.2, y + 0.5, 0.8)], '#f6f5f1');
+      const c = this.ctx;
+      const m = this.iso(x + 0.35, y + 0.52, 0.67);
+      c.strokeStyle = '#c96442'; c.lineWidth = 1.2;
+      for (let i = 0; i < 4; i++) { const a = (i / 4) * Math.PI; c.beginPath(); c.moveTo(m.x + Math.cos(a) * 3, m.y + Math.sin(a) * 3); c.lineTo(m.x - Math.cos(a) * 3, m.y - Math.sin(a) * 3); c.stroke(); }
+      for (const dx of [0.25, 0.45]) {
+        const b = this.iso(x + dx, y + 0.2, 1.1), t = this.iso(x + dx + 0.02, y + 0.42, 1.38);
+        c.strokeStyle = '#2a2a2e'; c.lineWidth = 1.2;
+        c.beginPath(); c.moveTo(b.x, b.y); c.quadraticCurveTo(b.x, t.y, t.x, t.y); c.stroke();
+        c.fillStyle = '#18181a'; c.beginPath(); c.arc(t.x, t.y, 2.2, 0, Math.PI * 2); c.fill();
+      }
+    }
+
+    // Light stand with a softbox angled toward the backdrop.
+    softbox(x, y, side) {
+      const c = this.ctx;
+      const base = this.iso(x + 0.15, y + 0.15, 0), top = this.iso(x + 0.15, y + 0.15, 1.75);
+      c.strokeStyle = '#2a2a2e'; c.lineWidth = 1.5;
+      for (const [dx, dy] of [[-0.18, 0.1], [0.18, 0.1], [0, -0.2]]) { const e = this.iso(x + 0.15 + dx, y + 0.15 + dy, 0); c.beginPath(); c.moveTo(base.x, base.y - 6); c.lineTo(e.x, e.y); c.stroke(); }
+      c.beginPath(); c.moveTo(base.x, base.y); c.lineTo(top.x, top.y); c.stroke();
+      this.box(x - 0.1, y - 0.05, 1.65, 0.5, 0.4, 0.45, '#2a2a2e', '#f8f6ee', '#1f1f22');
+      const g = this.iso(x + 0.15, y + 0.35, 1.87);
+      const glow = c.createRadialGradient(g.x, g.y, 2, g.x, g.y, 26);
+      glow.addColorStop(0, 'rgba(255,250,235,.35)'); glow.addColorStop(1, 'rgba(255,250,235,0)');
+      c.fillStyle = glow; c.beginPath(); c.arc(g.x, g.y, 26, 0, Math.PI * 2); c.fill();
+      void side;
+    }
+
+    // Video camera on a tripod, pointed at the backdrop.
+    tripodCamera(x, y) {
+      const c = this.ctx;
+      const head = this.iso(x + 0.2, y + 0.2, 1.2);
+      c.strokeStyle = '#2a2a2e'; c.lineWidth = 1.4;
+      for (const [dx, dy] of [[-0.2, 0.15], [0.2, 0.15], [0, -0.25]]) { const e = this.iso(x + 0.2 + dx, y + 0.2 + dy, 0); c.beginPath(); c.moveTo(head.x, head.y); c.lineTo(e.x, e.y); c.stroke(); }
+      this.box(x + 0.05, y + 0.05, 1.2, 0.3, 0.45, 0.25, '#2a2a2e', '#18181a', '#202024');
+      this.box(x + 0.12, y - 0.12, 1.25, 0.16, 0.17, 0.16, '#3a3a3e', '#111', '#1a1a1c');
+      const led = this.iso(x + 0.35, y + 0.5, 1.4);
+      c.fillStyle = Math.sin(this.t / 300) > 0 ? '#ff3b30' : '#5a1a16';
+      c.beginPath(); c.arc(led.x, led.y, 1.4, 0, Math.PI * 2); c.fill();
     }
 
     meetingTable(x, y) {

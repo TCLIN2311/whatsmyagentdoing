@@ -186,6 +186,73 @@ export class Office3D extends window.Office {
     return m;
   }
 
+  // ---- interior finishes: walnut veneer, brown leather with brass studs
+  restyle(model, mat) {
+    model.traverse((o) => { if (o.isMesh) o.material = mat; });
+  }
+
+  walnutMat() {
+    if (this._walnut) return this._walnut;
+    const tex = this.patternTexture((c, sz) => {
+      c.fillStyle = '#5e3f2a'; c.fillRect(0, 0, sz, sz);
+      let seed = 5;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      for (let g = 0; g < 46; g++) {
+        const y0 = rnd() * sz, amp = 1 + rnd() * 4, f = 0.02 + rnd() * 0.04, ph = rnd() * 6;
+        c.strokeStyle = rnd() < 0.5 ? `rgba(30,16,6,${0.15 + rnd() * 0.25})` : `rgba(150,100,60,${0.08 + rnd() * 0.12})`;
+        c.lineWidth = 0.6 + rnd() * 1.8;
+        c.beginPath();
+        for (let x = 0; x <= sz; x += 4) { const y = y0 + Math.sin(x * f + ph) * amp; x ? c.lineTo(x, y) : c.moveTo(x, y); }
+        c.stroke();
+      }
+    }, 256);
+    tex.repeat.set(2, 2);
+    return (this._walnut = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55, metalness: 0 }));
+  }
+
+  leatherMat() {
+    if (this._leather) return this._leather;
+    const tex = this.patternTexture((c, sz) => {
+      c.fillStyle = '#7a4a2b'; c.fillRect(0, 0, sz, sz);
+      let seed = 3;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      for (let k = 0; k < 420; k++) {
+        c.fillStyle = rnd() < 0.5 ? 'rgba(40,20,8,.10)' : 'rgba(255,220,180,.05)';
+        c.beginPath(); c.arc(rnd() * sz, rnd() * sz, 1 + rnd() * 5, 0, Math.PI * 2); c.fill();
+      }
+    }, 128);
+    return (this._leather = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.42, metalness: 0.05 }));
+  }
+
+  // Brass studs along the outer edges of a sofa, found by raycasting its
+  // +x and +z faces (the ones the camera sees) at two heights.
+  studs(model) {
+    model.updateMatrixWorld(true);
+    const b = new THREE.Box3().setFromObject(model);
+    const mat = this._brass || (this._brass = new THREE.MeshStandardMaterial({ color: 0xd4af5f, roughness: 0.3, metalness: 0.85 }));
+    const geo = this._studGeo || (this._studGeo = new THREE.SphereGeometry(0.018, 8, 6));
+    const ray = new THREE.Raycaster();
+    const dirs = [
+      [new THREE.Vector3(0, 0, -1), (t) => new THREE.Vector3(b.min.x + t * (b.max.x - b.min.x), 0, b.max.z + 0.5), b.max.x - b.min.x],
+      [new THREE.Vector3(-1, 0, 0), (t) => new THREE.Vector3(b.max.x + 0.5, 0, b.min.z + t * (b.max.z - b.min.z)), b.max.z - b.min.z],
+    ];
+    const h = b.max.y - b.min.y;
+    for (const [dir, at, len] of dirs) {
+      const n = Math.max(3, Math.round(len / 0.11));
+      for (const fy of [0.16, 0.5]) {
+        for (let i = 1; i < n; i++) {
+          const o = at(i / n); o.y = b.min.y + h * fy;
+          ray.set(o, dir);
+          const hit = ray.intersectObject(model, true)[0];
+          if (!hit || hit.distance > 1.4) continue;
+          const s = new THREE.Mesh(geo, mat);
+          s.position.copy(hit.point).addScaledVector(dir, -0.008);
+          this.room.add(s);
+        }
+      }
+    }
+  }
+
   boxMesh(x, y, z, w, d, h, color, opts = {}) {
     const mat = opts.mat || new THREE.MeshStandardMaterial({ color, roughness: opts.rough ?? 0.8, metalness: opts.metal ?? 0, ...(opts.emissive ? { emissive: opts.emissive, emissiveIntensity: opts.ei ?? 1 } : {}) });
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -231,45 +298,22 @@ export class Office3D extends window.Office {
     const dark = this.pal.dark;
 
     // floors
-    const floor = (x, y, w, d, color, tex) => {
-      const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.9, map: tex || null });
+    const floor = (x, y, w, d, color, tex, rough = 0.9) => {
+      const mat = new THREE.MeshStandardMaterial({ color, roughness: rough, map: tex || null });
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
       m.rotation.x = -Math.PI / 2;
       m.position.set(x + w / 2, 0, y + d / 2);
       m.receiveShadow = true;
       this.room.add(m);
     };
-    // Natural oak: each plank its own tone, with fine grain and offset joints.
-    const planks = this.patternTexture((c, s) => {
-      const tones = dark ? ['#a8865f', '#b08d64', '#9f7f59', '#ab8a62'] : ['#dcbd90', '#e3c599', '#d4b587', '#dfc194'];
-      const rows = 4, ph = s / rows;
-      let seed = 7;
+    // Off-white painted (epoxy) floor: seamless, faint mottling, a little sheen.
+    const planks = this.patternTexture((c, sz) => {
+      c.fillStyle = dark ? '#c4bdb0' : '#efe9df'; c.fillRect(0, 0, sz, sz);
+      let seed = 11;
       const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-      for (let r = 0; r < rows; r++) {
-        const joint = ((r * 37) % 4 + 0.5) * s / 4;
-        for (const [x0, x1] of [[0, joint], [joint, s]]) {
-          c.fillStyle = tones[(r * 2 + (x0 ? 1 : 0)) % tones.length];
-          c.fillRect(x0, r * ph, x1 - x0, ph);
-        }
-        // grain: thin wavy lines along the plank
-        for (let g = 0; g < 7; g++) {
-          const gy = r * ph + 3 + rnd() * (ph - 6);
-          c.strokeStyle = dark ? `rgba(70,45,20,${0.12 + rnd() * 0.14})` : `rgba(140,95,45,${0.1 + rnd() * 0.14})`;
-          c.lineWidth = 0.6 + rnd() * 0.8;
-          c.beginPath();
-          const amp = 0.6 + rnd() * 1.6, f = 0.02 + rnd() * 0.03, ph0 = rnd() * 6;
-          for (let x = 0; x <= s; x += 4) { const yy = gy + Math.sin(x * f + ph0) * amp; x ? c.lineTo(x, yy) : c.moveTo(x, yy); }
-          c.stroke();
-        }
-        // a knot now and then
-        if (rnd() < 0.5) {
-          const kx = rnd() * s, ky = r * ph + ph / 2;
-          c.fillStyle = dark ? 'rgba(70,45,20,.35)' : 'rgba(130,85,40,.3)';
-          c.beginPath(); c.ellipse(kx, ky, 3.5, 1.6, 0, 0, Math.PI * 2); c.fill();
-        }
-        c.strokeStyle = dark ? 'rgba(50,30,12,.45)' : 'rgba(110,75,35,.3)'; c.lineWidth = 1.5;
-        c.beginPath(); c.moveTo(0, r * ph); c.lineTo(s, r * ph); c.stroke();
-        c.beginPath(); c.moveTo(joint, r * ph); c.lineTo(joint, (r + 1) * ph); c.stroke();
+      for (let k = 0; k < 260; k++) {
+        c.fillStyle = rnd() < 0.5 ? 'rgba(255,255,255,.10)' : 'rgba(120,100,70,.045)';
+        c.beginPath(); c.arc(rnd() * sz, rnd() * sz, 2 + rnd() * 9, 0, Math.PI * 2); c.fill();
       }
     }, 256);
     const tiles = this.patternTexture((c, s) => {
@@ -277,12 +321,12 @@ export class Office3D extends window.Office {
       c.fillStyle = dark ? '#35383c' : '#e3e4e0'; c.fillRect(0, 0, s / 2, s / 2); c.fillRect(s / 2, s / 2, s / 2, s / 2);
     });
     planks.repeat.set(OW / 2, D / 2);
-    floor(0, 0, OW, D, 0xffffff, planks);
+    floor(0, 0, OW, D, 0xffffff, planks, 0.45);
     floor(OW, 0, W - OW, MR, dark ? 0x33404d : 0xc9d3dc);
     tiles.repeat.set((W - OW), (PY - MR));
     floor(OW, MR, W - OW, PY - MR, 0xffffff, tiles);
     const planks2 = planks.clone(); planks2.needsUpdate = true; planks2.repeat.set((W - OW) / 2, (D - PY) / 2);
-    floor(OW, PY, W - OW, D - PY, 0xffffff, planks2);
+    floor(OW, PY, W - OW, D - PY, 0xffffff, planks2, 0.45);
     const rm = plan.rooms;
     if (rm) {
       // rubber gym floor, carpet in the Switch and movie rooms (just above the planks)
@@ -548,6 +592,7 @@ export class Office3D extends window.Office {
         for (let i = 0; i < n; i++) {
           const b = this.place('bookcaseOpen', p.x + i * u, p.y, u, p.d, { h: 1.45, stretch: true });
           if (!b) continue;
+          this.restyle(b, this.walnutMat());
           // book stacks on each shelf
           b.updateMatrixWorld(true);
           const ray = new THREE.Raycaster();
@@ -563,9 +608,11 @@ export class Office3D extends window.Office {
         }
         break;
       }
-      case 'couch':
-        this.place('loungeSofa', p.x - 0.1, p.y - 0.15, p.w + 0.2, p.d + 0.2, { h: 0.8, stretch: true });
+      case 'couch': {
+        const m = this.place('loungeSofa', p.x - 0.1, p.y - 0.15, p.w + 0.2, p.d + 0.2, { h: 0.8, stretch: true });
+        if (m) { this.restyle(m, this.leatherMat()); this.studs(m); }
         break;
+      }
       case 'coffeeTable':
         this.place('tableCoffee', p.x, p.y, p.w, p.d, { h: 0.35 });
         this.place('radio', p.x + 1.0, p.y + 0.2, 0.3, 0.18, { y0: 0.35, h: 0.18 });
@@ -655,9 +702,9 @@ export class Office3D extends window.Office {
       // ---- Switch room
       case 'tvWall': {
         const { x, y } = p;
-        if (!this.place('cabinetTelevision', x, y, 0.5, 2.0, { h: 0.5, rot: Math.PI / 2, stretch: true })) {
-          this.boxMesh(x, y, 0, 0.5, 2.0, 0.5, dark ? 0x6e533b : 0xa8825a);
-        }
+        const cab = this.place('cabinetTelevision', x, y, 0.5, 2.0, { h: 0.5, rot: Math.PI / 2, stretch: true });
+        if (cab) this.restyle(cab, this.walnutMat());
+        else this.boxMesh(x, y, 0, 0.5, 2.0, 0.5, 0x5e412d, { mat: this.walnutMat() });
         this.boxMesh(x + 0.15, y + 0.85, 0.5, 0.18, 0.3, 0.1, 0x2a2a2e);
         this.boxMesh(x + 0.15, y + 0.78, 0.5, 0.18, 0.07, 0.1, 0xe60012);
         this.boxMesh(x + 0.15, y + 1.15, 0.5, 0.18, 0.07, 0.1, 0x00a2e8);
@@ -669,8 +716,10 @@ export class Office3D extends window.Office {
         break;
       }
       case 'sofaY':
-        if (!this.place('loungeSofa', p.x - 0.05, p.y - 0.15, 0.85, p.d + 0.3, { h: 0.8, rot: -Math.PI / 2, stretch: true })) {
-          this.boxMesh(p.x, p.y, 0, 0.8, p.d, 0.32, new THREE.Color(p.color).getHex());
+        {
+          const m = this.place('loungeSofa', p.x - 0.05, p.y - 0.15, 0.85, p.d + 0.3, { h: 0.8, rot: -Math.PI / 2, stretch: true });
+          if (m) { this.restyle(m, this.leatherMat()); this.studs(m); }
+          else this.boxMesh(p.x, p.y, 0, 0.8, p.d, 0.32, 0x6e4126, { mat: this.leatherMat() });
         }
         break;
 
@@ -1144,6 +1193,7 @@ export class Office3D extends window.Office {
     if (a) return a;
     const gltf = this.chars[p.h % this.chars.length];
     const obj = cloneSkinned(gltf.scene);
+    if (p.look) { try { this.dress(obj, p.look); } catch (e) { console.warn('outfit:', e); } }
     obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     const box = new THREE.Box3().setFromObject(obj);
     const s = CHAR_HEIGHT * (p.s && p.s.subagent ? 0.8 : 1) / (box.max.y - box.min.y);
@@ -1161,6 +1211,156 @@ export class Office3D extends window.Office {
     a = { obj, mixer, actions, current: null, head, headRest: head ? head.rotation.x : 0, armR, prop, cup, book, yaw: 0, last: { x: p.x, y: p.y } };
     this.actors.set(p.key, a);
     return a;
+  }
+
+  // Recolour a Kenney character from a resident's "look" (team.json) and add
+  // accessories. Parts are told apart by the bone each vertex follows; within
+  // the head, skin is the colour shared with the hands and hair is the next
+  // most common one. Everything else keeps the model's own colours.
+  dress(obj, look) {
+    const col = (v, fb) => new THREE.Color(typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v) ? v : fb);
+    const C = {
+      skin: col(look.skin, '#e5b38f'), hair: col(look.hair, '#1c1c1c'), jacket: col(look.jacket, '#222224'),
+      pants: col(look.pants, '#222224'), shoes: col(look.shoes, '#1a1a1a'),
+    };
+    obj.updateMatrixWorld(true);
+    const meshes = [];
+    obj.traverse((o) => { if (o.isSkinnedMesh) meshes.push(o); });
+    const pixels = this._pix || (this._pix = new WeakMap());
+    const verts = [];
+    const count = {};
+    const tally = (part, key) => { (count[part] ||= {})[key] = (count[part][key] || 0) + 1; };
+    const v = new THREE.Vector3();
+    let legMin = Infinity, legMax = -Infinity;
+    const hb0 = new THREE.Box3();
+    for (const m of meshes) {
+      const img = m.material.map && m.material.map.image;
+      if (!img) continue;
+      let px = pixels.get(img);
+      if (!px) {
+        const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+        const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0);
+        px = { w: cv.width, h: cv.height, d: cx.getImageData(0, 0, cv.width, cv.height).data };
+        pixels.set(img, px);
+      }
+      m.geometry = m.geometry.clone();
+      const g = m.geometry, uv = g.attributes.uv, si = g.attributes.skinIndex, sw = g.attributes.skinWeight;
+      for (let i = 0; i < uv.count; i++) {
+        let best = 0;
+        for (let k = 1; k < 4; k++) if (sw.getComponent(i, k) > sw.getComponent(i, best)) best = k;
+        const bone = m.skeleton.bones[si.getComponent(i, best)];
+        const name = bone ? bone.name : '';
+        const part = name.startsWith('leg') ? 'leg' : name.startsWith('arm') ? 'arm' : name === 'head' ? 'head' : 'torso';
+        const x = Math.min(px.w - 1, Math.max(0, Math.floor(uv.getX(i) * px.w)));
+        const y = Math.min(px.h - 1, Math.max(0, Math.floor(uv.getY(i) * px.h)));
+        const o = (y * px.w + x) * 4;
+        const key = (px.d[o] << 16) | (px.d[o + 1] << 8) | px.d[o + 2];
+        let ly = 0, hy = 0, hz = 0;
+        if (part === 'leg') { m.getVertexPosition(i, v); ly = v.y; legMin = Math.min(legMin, ly); legMax = Math.max(legMax, ly); }
+        if (part === 'head') { m.getVertexPosition(i, v); hy = v.y; hz = v.z; hb0.expandByPoint(v); }
+        verts.push({ m, i, part, key, ly, hy, hz });
+        tally(part, key);
+      }
+    }
+    const top = (o, skip) => Object.entries(o || {}).filter(([k]) => +k !== skip).sort((a, b) => b[1] - a[1])[0];
+    const head = count.head || {}, arm = count.arm || {};
+    let skinKey = null, bestN = -1;
+    for (const [k, n] of Object.entries(head)) if (arm[k] && n + arm[k] > bestN) { bestN = n + arm[k]; skinKey = +k; }
+    if (skinKey === null) skinKey = +((top(head) || [0])[0]);
+    // Kenney hair is painted with a gradient of shades, so classify head
+    // colours by distance: close to the skin swatch = skin, very dark = eyes
+    // and brows (kept), anything else = hair, keeping its relative shading.
+    const rgb = (k) => [((k >> 16) & 255) / 255, ((k >> 8) & 255) / 255, (k & 255) / 255];
+    const lum = (c) => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+    const sk = rgb(skinKey);
+    const dist = (c) => Math.hypot(c[0] - sk[0], c[1] - sk[1], c[2] - sk[2]);
+    let hairLum = 0, hairN = 0;
+    for (const [k, n] of Object.entries(head)) {
+      const c = rgb(+k);
+      if (dist(c) >= 0.28 && lum(c) >= 0.1) { hairLum += lum(c) * n; hairN += n; }
+    }
+    hairLum = hairN ? hairLum / hairN : 1;
+    const shadeOf = (base, k, ref) => base.clone().multiplyScalar(Math.min(1.3, Math.max(0.65, lum(rgb(k)) / ref)));
+    const cols = new Map();
+    for (const m of meshes) cols.set(m, new Float32Array(m.geometry.attributes.position.count * 3));
+    const tmp = new THREE.Color();
+    // the face: front part of the head, below the brow line
+    const hc = hb0.getCenter(new THREE.Vector3()), hs = hb0.getSize(new THREE.Vector3());
+    const onFace = (hy, hz) => hz > hc.z + hs.z * 0.2 && hy < hc.y + hs.y * 0.12;
+    for (const { m, i, part, key, ly, hy, hz } of verts) {
+      let c;
+      if (key === skinKey && part !== 'leg') c = C.skin;
+      else if (part === 'head') {
+        const k = rgb(key);
+        if (dist(k) < 0.28 && onFace(hy, hz)) c = shadeOf(C.skin, key, lum(sk));
+        else if (lum(k) < 0.1) c = null;
+        else c = shadeOf(C.hair, key, hairLum);
+      }
+      else if (part === 'leg') c = ly < legMin + (legMax - legMin) * 0.22 ? C.shoes : C.pants;
+      else c = C.jacket;
+      if (!c) c = tmp.setRGB(((key >> 16) & 255) / 255, ((key >> 8) & 255) / 255, (key & 255) / 255, THREE.SRGBColorSpace);
+      const a = cols.get(m);
+      a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b;
+    }
+    for (const m of meshes) {
+      m.geometry.setAttribute('color', new THREE.BufferAttribute(cols.get(m), 3));
+      m.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide });
+    }
+
+    // accessories, parented to the bones so they follow the animation
+    const headBone = obj.getObjectByName('head');
+    const torsoBone = obj.getObjectByName('torso');
+    const boxOf = (part) => {
+      const b = new THREE.Box3();
+      for (const t of verts) if (t.part === part) { t.m.getVertexPosition(t.i, v); b.expandByPoint(v.applyMatrix4(t.m.matrixWorld)); }
+      return b;
+    };
+    const mat = (c, extra = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, ...extra });
+    const add = (bone, mesh, worldPos) => { bone.updateMatrixWorld(true); mesh.position.copy(bone.worldToLocal(worldPos.clone())); bone.add(mesh); mesh.castShadow = true; };
+    if (headBone) {
+      const hb = boxOf('head');
+      const c = hb.getCenter(new THREE.Vector3()), s = hb.getSize(new THREE.Vector3());
+      const front = hb.max.z;
+      const eyeY = c.y - s.y * 0.06;
+      if (look.sunglasses || look.glasses) {
+        const frame = mat(col(look.sunglasses || look.glasses, '#111111'));
+        for (const sx of [-1, 1]) {
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(s.x * 0.13, s.x * 0.022, 6, 18), frame);
+          add(headBone, ring, new THREE.Vector3(c.x + sx * s.x * 0.2, eyeY, front + 0.006));
+          if (look.sunglasses) {
+            const lens = new THREE.Mesh(new THREE.CircleGeometry(s.x * 0.12, 18), mat(col(look.lens, '#6b4a2a'), { roughness: 0.15, metalness: 0.2 }));
+            add(headBone, lens, new THREE.Vector3(c.x + sx * s.x * 0.2, eyeY, front + 0.004));
+          }
+        }
+        const bridge = new THREE.Mesh(new THREE.BoxGeometry(s.x * 0.12, s.x * 0.03, s.x * 0.03), frame);
+        add(headBone, bridge, new THREE.Vector3(c.x, eyeY + s.x * 0.03, front + 0.006));
+      }
+      if (look.beard) {
+        const beard = new THREE.Mesh(new THREE.BoxGeometry(s.x * 0.78, s.y * 0.2, s.z * 0.06), mat(C.hair, { transparent: true, opacity: 0.85 }));
+        add(headBone, beard, new THREE.Vector3(c.x, hb.min.y + s.y * 0.12, front + 0.002));
+      }
+      if (look.hat) {
+        const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat(col(look.hat, '#161617'), { roughness: 0.95 }));
+        dome.scale.set(s.x * 0.58, s.y * 0.5, s.z * 0.58);
+        add(headBone, dome, new THREE.Vector3(c.x, c.y + s.y * 0.12, c.z));
+      }
+    }
+    if (torsoBone) {
+      const tb = boxOf('torso');
+      const c = tb.getCenter(new THREE.Vector3()), s = tb.getSize(new THREE.Vector3());
+      if (look.inner) {
+        const tee = new THREE.Mesh(new THREE.BoxGeometry(s.x * 0.3, s.y * 0.92, 0.01), mat(col(look.inner, '#f4f4f1'), { roughness: 0.9 }));
+        add(torsoBone, tee, new THREE.Vector3(c.x, c.y + s.y * 0.02, tb.max.z + 0.004));
+      }
+      if (look.coat) {
+        const skirt = new THREE.Mesh(new THREE.BoxGeometry(s.x * 1.04, s.y * 0.6, s.z * 1.06), mat(C.jacket, { roughness: 0.85 }));
+        add(torsoBone, skirt, new THREE.Vector3(c.x, tb.min.y - s.y * 0.26, c.z));
+        if (look.inner) {
+          const gap = new THREE.Mesh(new THREE.BoxGeometry(s.x * 0.3, s.y * 0.6, 0.01), mat(col(look.inner, '#f4f4f1'), { roughness: 0.9 }));
+          add(torsoBone, gap, new THREE.Vector3(c.x, tb.min.y - s.y * 0.26, c.z + s.z * 0.53 + 0.004));
+        }
+      }
+    }
   }
 
   play(a, name) {

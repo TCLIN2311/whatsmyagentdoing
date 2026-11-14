@@ -48,6 +48,8 @@
     badge.image.src = badge.logo;
   }
   const PANTS = ['#34405a', '#2c2c34', '#4a3f35', '#3b4a3f'];
+  // Named hairstyles a resident's "look" can ask for (4 = slicked back).
+  const HAIR_STYLE = { short: 0, long: 1, bun: 2, crop: 3, slick: 4 };
   const PANEL = ['#7d93c4', '#d98b6a', '#7fb08a', '#c9a24c'];
 
   const STATUS_COLOR = {
@@ -75,6 +77,9 @@
     return dark ? {
       dark: true,
       wood1: '#a8865f', wood2: '#a07f58', woodLine: 'rgba(70,45,20,.28)',
+      paint1: '#c9c3b7', paint2: '#c5bfb3', paintSheen: 'rgba(255,255,255,.035)',
+      walnut: '#5e412d', walnutL: '#4d3524', walnutR: '#3f2b1d', walnutGrain: 'rgba(20,10,4,.28)',
+      leather: '#6a4027', leatherD: '#52311c', stud: '#c9a75e',
       gymFloor: '#2e3236', gameFloor: '#3c3550', movieFloor: '#3e2328',
       tileA: '#3d4044', tileB: '#35383c', carpet: '#33404d', carpetLine: 'rgba(255,255,255,.04)',
       wallL: '#4a4640', wallR: '#3f3b36', wallTop: '#5a554e', trim: '#2b2926',
@@ -88,6 +93,9 @@
     } : {
       dark: false,
       wood1: '#ddbf92', wood2: '#d5b688', woodLine: 'rgba(120,80,40,.18)',
+      paint1: '#f1ece2', paint2: '#ede7dc', paintSheen: 'rgba(255,255,255,.35)',
+      walnut: '#6e4c34', walnutL: '#5a3d29', walnutR: '#4a3221', walnutGrain: 'rgba(30,16,6,.22)',
+      leather: '#7a4a2b', leatherD: '#5f3920', stud: '#d9b56a',
       gymFloor: '#6b727a', gameFloor: '#cfc6e0', movieFloor: '#8a4a52',
       tileA: '#f4f4f1', tileB: '#e6e7e3', carpet: '#c9d3dc', carpetLine: 'rgba(0,0,0,.035)',
       wallL: '#f4efe6', wallR: '#e8e1d4', wallTop: '#fbf8f2', trim: '#cfc5b3',
@@ -523,8 +531,8 @@
       // ---- lounge
       const lx = mx + 0.6, ly = PY + 0.4;
       const shelfX = mx + 3.4, shelfW = RW - 3.6;
-      longBox(shelfX, PY - 0.25, 0, shelfW, 0.45, 1.45, this.shade(pal.deskTop, -5), pal.deskL, pal.deskR, {
-        extra: (x0, x1) => this.books(x0, x1, PY + 0.2),
+      longBox(shelfX, PY - 0.25, 0, shelfW, 0.45, 1.45, pal.walnut, pal.walnutL, pal.walnutR, {
+        extra: (x0, x1) => { this.grain(x0, x1, PY + 0.2, 1.45); this.books(x0, x1, PY + 0.2); },
       });
       solid(shelfX, PY - 0.25, shelfW, 0.45);
       prop('shelf', { x: shelfX, y: PY - 0.25, w: shelfW, d: 0.45 });
@@ -657,7 +665,7 @@
         key: s.key, h, s, look,
         skin: lk('skin', pick(SKIN, h, 3)), hair: lk('hair', pick(HAIR, h, 7)), pants: lk('pants', pick(PANTS, h, 13)),
         shirt: lk('jacket', pick(SHIRT[s.agent] || SHIRT.claude, h, 11)),
-        hairStyle: look && look.hairStyle === 'slick' ? 4 : h % 4,
+        hairStyle: look && look.hairStyle in HAIR_STYLE ? HAIR_STYLE[look.hairStyle] : h % 4,
         phase: (h % 1000) / 1000 * Math.PI * 2,
         x: door.x, y: door.y,
         path: [], walkFace: 'front', until: 0, mode: null,
@@ -834,10 +842,14 @@
       for (let x = 0; x < Math.ceil(OW); x++) {
         for (let y = 0; y < Math.ceil(D); y++) {
           const x1 = Math.min(OW, x + 1), y1 = Math.min(D, y + 1);
-          this.poly([P(x, y), P(x1, y), P(x1, y1), P(x, y1)], (x + y) % 2 ? pal.wood1 : pal.wood2);
+          this.poly([P(x, y), P(x1, y), P(x1, y1), P(x, y1)], (x + y) % 2 ? pal.paint1 : pal.paint2);
         }
       }
-      for (let y = 0.5; y < D; y += 0.5) this.poly([P(0, y), P(OW, y), P(OW, y + 0.012), P(0, y + 0.012)], pal.woodLine);
+      // painted (epoxy) floor: seamless, with a soft sheen instead of planks
+      for (let k = 0; k < 3; k++) {
+        const y0 = D * (0.18 + k * 0.3);
+        this.poly([P(0, y0), P(OW, y0 - 0.6), P(OW, y0 + 0.2), P(0, y0 + 0.8)], pal.paintSheen);
+      }
       const rm = this.plan.rooms;
       if (rm) {
         // rubber gym floor, carpet in the Switch and movie rooms
@@ -859,7 +871,7 @@
       for (let x = Math.floor(OW); x < W; x++) {
         for (let y = PY; y < D; y++) {
           const x0 = Math.max(OW, x), x1 = Math.min(W, x + 1), y1 = Math.min(D, y + 1);
-          this.poly([P(x0, y), P(x1, y), P(x1, y1), P(x0, y1)], (x + Math.floor(y)) % 2 ? pal.wood1 : pal.wood2);
+          this.poly([P(x0, y), P(x1, y), P(x1, y1), P(x0, y1)], (x + Math.floor(y)) % 2 ? pal.paint1 : pal.paint2);
         }
       }
       this.poly([P(OW + 0.3, PY + 0.6), P(OW + 4.3, PY + 0.6), P(OW + 4.3, D - 0.4), P(OW + 0.3, D - 0.4)], pal.rug);
@@ -1060,13 +1072,29 @@
       c.fillStyle = '#3b8ee0'; c.fillRect(tap.x - 1.5, tap.y, 3, 3);
     }
 
+    // brown leather sofa with brass studs (rivets) along the edges
     couch(x, y) {
       const pal = this.pal;
-      this.box(x, y - 0.05, 0.32, 2.8, 0.25, 0.42, this.shade(pal.couch, 10), pal.couchD, this.shade(pal.couchD, -12));
-      this.box(x, y, 0, 2.8, 0.8, 0.32, pal.couch, pal.couchD, this.shade(pal.couchD, -12));
-      this.box(x - 0.15, y - 0.05, 0, 0.18, 0.85, 0.52, this.shade(pal.couch, 6), pal.couchD, this.shade(pal.couchD, -12));
-      this.box(x + 2.8, y - 0.05, 0, 0.18, 0.85, 0.52, this.shade(pal.couch, 6), pal.couchD, this.shade(pal.couchD, -12));
-      this.box(x + 2.15, y + 0.12, 0.32, 0.35, 0.16, 0.28, '#e9c46a', '#d4ae52', '#c19c43');
+      const top = pal.leather, l = pal.leatherD, r = this.shade(pal.leatherD, -12);
+      this.box(x, y - 0.05, 0.32, 2.8, 0.25, 0.42, this.shade(top, 10), l, r);
+      this.box(x, y, 0, 2.8, 0.8, 0.32, top, l, r);
+      this.box(x - 0.15, y - 0.05, 0, 0.18, 0.85, 0.52, this.shade(top, 6), l, r);
+      this.box(x + 2.8, y - 0.05, 0, 0.18, 0.85, 0.52, this.shade(top, 6), l, r);
+      this.studs(x + 0.04, y + 0.8, 0.28, x + 2.76, y + 0.8, 0.28, 18); // seat front
+      this.studs(x - 0.13, y + 0.8, 0.48, x + 0.01, y + 0.8, 0.48, 2); // arm fronts
+      this.studs(x + 2.82, y + 0.8, 0.48, x + 2.96, y + 0.8, 0.48, 2);
+      this.studs(x + 2.98, y - 0.03, 0.48, x + 2.98, y + 0.78, 0.48, 6); // right arm side
+      this.box(x + 2.15, y + 0.12, 0.32, 0.35, 0.16, 0.28, '#efe8da', '#d9d1c2', '#c9c0b0');
+    }
+
+    studs(x0, y0, z0, x1, y1, z1, n) {
+      const c = this.ctx;
+      c.fillStyle = this.pal.stud;
+      for (let i = 0; i < n; i++) {
+        const k = n === 1 ? 0.5 : i / (n - 1);
+        const p = this.iso(x0 + (x1 - x0) * k, y0 + (y1 - y0) * k, z0 + (z1 - z0) * k);
+        c.beginPath(); c.arc(p.x, p.y, 0.9, 0, Math.PI * 2); c.fill();
+      }
     }
 
     coffeeTable(x, y) {
@@ -1087,6 +1115,15 @@
       c.beginPath(); c.ellipse(p.x - 3, p.y - 14, 10, 6, -0.2, 0, Math.PI * 2); c.fill();
     }
 
+    // walnut veneer grain on a cabinet's front face (y = that face)
+    grain(x0, x1, y, h) {
+      const P = (a, b, c) => this.iso(a, b, c);
+      for (let k = 1; k < 9; k++) {
+        const z = (h / 9) * k + Math.sin(x0 * 5 + k) * 0.02;
+        this.poly([P(x0, y, z), P(x1, y, z + 0.015), P(x1, y, z + 0.022), P(x0, y, z + 0.007)], this.pal.walnutGrain);
+      }
+    }
+
     books(x0, x1, y) {
       const P = (a, b, c) => this.iso(a, b, c);
       const cols = this.pal.book;
@@ -1101,7 +1138,7 @@
           bx += bw + 0.015;
           i++;
         }
-        this.poly([P(x0, y, z - 0.02), P(x1, y, z - 0.02), P(x1, y, z), P(x0, y, z)], this.pal.deskR);
+        this.poly([P(x0, y, z - 0.02), P(x1, y, z - 0.02), P(x1, y, z), P(x0, y, z)], this.pal.walnutR);
       }
     }
 
@@ -1160,7 +1197,11 @@
 
     tvWall(x, y) {
       // low cabinet with a console on it, TV on the wall above
-      this.box(x, y, 0, 0.5, 2.0, 0.5, this.shade(this.pal.deskTop, -5), this.pal.deskL, this.pal.deskR);
+      this.box(x, y, 0, 0.5, 2.0, 0.5, this.pal.walnut, this.pal.walnutL, this.pal.walnutR);
+      for (let k = 1; k < 4; k++) { // walnut grain on the side facing the room
+        const z = 0.12 * k + 0.02;
+        this.poly([this.iso(x + 0.5, y, z), this.iso(x + 0.5, y + 2.0, z + 0.01), this.iso(x + 0.5, y + 2.0, z + 0.016), this.iso(x + 0.5, y, z + 0.006)], this.pal.walnutGrain);
+      }
       this.box(x + 0.15, y + 0.85, 0.5, 0.18, 0.3, 0.1, '#2a2a2e', '#1f1f22', '#18181a');
       this.box(x + 0.15, y + 0.78, 0.5, 0.18, 0.07, 0.1, '#e60012', '#c00010', '#a0000d');
       this.box(x + 0.15, y + 1.15, 0.5, 0.18, 0.07, 0.1, '#00a2e8', '#0088c4', '#0070a0');
@@ -1172,12 +1213,16 @@
     }
 
     // sofa with its back to +x, facing the left wall
-    sofaY(x, y, len, color) {
-      const d = this.shade(color, -25), e = this.shade(color, -40);
+    sofaY(x, y, len) {
+      const color = this.pal.leather;
+      const d = this.pal.leatherD, e = this.shade(this.pal.leatherD, -14);
       this.box(x, y, 0, 0.8, len, 0.32, color, d, e);
       this.box(x + 0.58, y, 0.32, 0.22, len, 0.42, this.shade(color, 10), d, e);
       this.box(x, y - 0.15, 0, 0.8, 0.15, 0.52, this.shade(color, 6), d, e);
       this.box(x, y + len, 0, 0.8, 0.15, 0.52, this.shade(color, 6), d, e);
+      this.studs(x + 0.8, y + 0.05, 0.7, x + 0.8, y + len - 0.05, 0.7, Math.round(len * 6)); // back, top edge
+      this.studs(x + 0.8, y + 0.05, 0.06, x + 0.8, y + len - 0.05, 0.06, Math.round(len * 6)); // back, bottom edge
+      this.studs(x + 0.05, y + len + 0.15, 0.48, x + 0.75, y + len + 0.15, 0.48, 5); // arm front
     }
 
     popcorn(x, y) {
@@ -1425,18 +1470,19 @@
       }
       const hip = seated ? -4 : -10;
       if (p.look) {
-        // Oversized, boxy jacket worn open over a tee, with contrast stitching.
-        this.roundRect(-8, hip - 13, 16, 15, 3, p.shirt);
+        // Oversized, boxy jacket (or a long coat) worn open over a tee, with contrast stitching.
+        const hem = lk.coat ? (seated ? 3 : 7) : 2;
+        this.roundRect(-8, hip - 13, 16, 13 + hem, 3, p.shirt);
         if (front) {
-          if (lk.inner) { c.fillStyle = lk.inner; c.fillRect(-2, hip - 13, 4, 15); }
+          if (lk.inner) { c.fillStyle = lk.inner; c.fillRect(-2, hip - 13, 4, 13 + hem); }
           if (lk.stitch) {
             c.strokeStyle = lk.stitch; c.lineWidth = 0.6;
             c.strokeRect(-6.5, hip - 10.5, 3.6, 3); // chest pockets
             c.strokeRect(2.9, hip - 10.5, 3.6, 3);
             c.beginPath();
-            c.moveTo(-2.6, hip - 12.5); c.lineTo(-2.6, hip + 1.5);
-            c.moveTo(2.6, hip - 12.5); c.lineTo(2.6, hip + 1.5);
-            c.moveTo(-7.5, hip + 0.6); c.lineTo(7.5, hip + 0.6);
+            c.moveTo(-2.6, hip - 12.5); c.lineTo(-2.6, hip + hem - 0.5);
+            c.moveTo(2.6, hip - 12.5); c.lineTo(2.6, hip + hem - 0.5);
+            c.moveTo(-7.5, hip + hem - 1.4); c.lineTo(7.5, hip + hem - 1.4);
             c.stroke();
           }
         }
@@ -1547,6 +1593,12 @@
         } else {
           c.fillRect(-3, hy - 0.5, 1.6, blink || sleepy ? 0.7 : 2);
           c.fillRect(1.6, hy - 0.5, 1.6, blink || sleepy ? 0.7 : 2);
+          if (lk.glasses) {
+            c.strokeStyle = lk.glasses; c.lineWidth = 0.8;
+            c.beginPath(); c.arc(-2.2, hy + 0.4, 2.2, 0, Math.PI * 2); c.stroke();
+            c.beginPath(); c.arc(2.4, hy + 0.4, 2.2, 0, Math.PI * 2); c.stroke();
+            c.beginPath(); c.moveTo(0, hy); c.lineTo(0.2, hy); c.stroke();
+          }
         }
         c.strokeStyle = '#2a2018'; c.lineWidth = 1;
         if (p.mode === 'wander' && !sleepy) {
@@ -1558,6 +1610,12 @@
         c.beginPath(); c.arc(0, hy - 0.5, 7.2, 0, Math.PI * 2); c.fill();
         if (p.hairStyle === 2) { c.beginPath(); c.arc(0, hy - 7, 3.2, 0, Math.PI * 2); c.fill(); }
         if (p.hairStyle === 1) c.fillRect(-6, hy, 12, 8);
+      }
+      if (lk.hat && !napping) {
+        c.fillStyle = lk.hat;
+        c.beginPath(); c.arc(0, hy - 2, 7.7, Math.PI, Math.PI * 2); c.fill();
+        c.fillStyle = this.shade(lk.hat, 22);
+        c.fillRect(-7.7, hy - 3, 15.4, 2.4);
       }
       if (st.act === 'arcade' || st.act === 'beanbag') {
         c.strokeStyle = '#222'; c.lineWidth = 2;

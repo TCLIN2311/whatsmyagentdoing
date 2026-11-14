@@ -12,6 +12,7 @@ const STATIC = {
   '/office3d.js': ['office3d.js', 'text/javascript; charset=utf-8'],
   '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'],
   '/popout.js': ['popout.js', 'text/javascript; charset=utf-8'],
+  '/team-board.js': ['team-board.js', 'text/javascript; charset=utf-8'],
 };
 const TYPES = { '.js': 'text/javascript; charset=utf-8', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json' };
 // 3D models, served as-is (3D view only).
@@ -116,6 +117,7 @@ function snapshot(watcher, opts) {
   const now = Date.now();
   const raw = watcher.sessions();
   const sessions = raw.map((s) => view(s, now, opts));
+  try { require('./residents').apply(sessions, raw, now, opts); } catch (e) { console.error('residents:', e.message); }
   sessions.sort((a, b) => (b.lastEventAt || 0) - (a.lastEventAt || 0));
   return { now, lang: opts.demo ? null : promptLanguage(raw), sessions, summary: summary(sessions, now) };
 }

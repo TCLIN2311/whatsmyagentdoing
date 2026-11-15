@@ -7,8 +7,8 @@
 //
 // Name tag and role come from an optional team.json next to the agent file
 // (<dir of the real .md>/<name>/team.json: { "title", "role" }), otherwise
-// from the agent's frontmatter. An optional "group" (e.g. one workflow) folds
-// its members into a single collapsible plate on the team board. An optional "look" object in team.json gives
+// from the agent's frontmatter. An optional "group" (e.g. one workflow; a string or
+// a list of names) folds its members into a single collapsible plate on the team board. An optional "look" object in team.json gives
 // the resident a custom outfit in the 2D office (see public/office.js newPerson).
 
 const fs = require('fs');
@@ -38,6 +38,14 @@ function teamJson(mdFile, name) {
   } catch { return {}; }
 }
 
+// "group" may be one name or a list (an agent that belongs to several workflows
+// shows up under each of them). Returns a non-empty array or null.
+function groups(g) {
+  const list = (Array.isArray(g) ? g : [g])
+    .filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
+  return list.length ? [...new Set(list)] : null;
+}
+
 // Cached by file times, so a new or edited agent shows up within seconds.
 function residents() {
   let files = [];
@@ -57,7 +65,7 @@ function residents() {
     list.push({
       name,
       label: t.title || name,
-      group: typeof t.group === 'string' && t.group.trim() ? t.group.trim() : null,
+      group: groups(t.group),
       role: t.role || (fm.description || '').split(/[。.]/)[0].slice(0, 80),
       look: t.look && typeof t.look === 'object' ? t.look : null,
       startedAt: stamp(path.join(AGENTS_DIR, f)),

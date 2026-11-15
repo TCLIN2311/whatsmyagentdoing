@@ -2,9 +2,10 @@
 // Greyed out while idle; lit with ~4000K warm white while working (thinking,
 // running a tool, replying, waiting for you). Reads the page's global
 // state.data.sessions, where src/residents.js tags entries with residentOf.
-// Agents sharing a team.json "group" fold into one collapsible plate
+// Agents sharing a team.json "group" (a name, or a list of names) fold into one collapsible plate
 // (e.g. "都市更新 ▸"); click it to show the member plates below. The group
-// plate lights up when any member is working.
+// plate lights up when any member is working. Clicking a plate opens that
+// agent in the side panel; clicking the same plate again folds the panel away.
 (() => {
   if (new URLSearchParams(location.search).get('pip') === '1') return;
   const LIGHT = '255, 206, 166'; // ~4000K colour temperature
@@ -48,7 +49,14 @@
     el.className = 'plate' + (t.on ? ' on' : '');
     el.textContent = t.label;
     el.title = `${name}${t.on ? '（工作中）' : '（待命）'}`;
-    el.onclick = (e) => { e.stopPropagation(); try { openDetail(t.key); } catch {} };
+    // Click again on the plate whose details are showing to fold the side panel away.
+    el.onclick = (e) => {
+      e.stopPropagation();
+      try {
+        if (state.side && sel === t.key) { closeDetail(); setSide(false); }
+        else openDetail(t.key);
+      } catch {}
+    };
     return el;
   }
 
@@ -98,13 +106,17 @@
     if (sig === last) return;
     last = sig;
     // Each group takes the slot of its first member; ungrouped plates stay as is.
+    // An agent listing several groups appears as a member of each.
     const items = [];
     const groups = new Map();
     for (const [name, t] of sorted) {
-      if (!t.group) { items.push({ name, ...t }); continue; }
-      let g = groups.get(t.group);
-      if (!g) { g = { group: t.group, members: [] }; groups.set(t.group, g); items.push(g); }
-      g.members.push([name, t]);
+      const names = Array.isArray(t.group) ? t.group : t.group ? [t.group] : [];
+      if (!names.length) { items.push({ name, ...t }); continue; }
+      for (const gn of names) {
+        let g = groups.get(gn);
+        if (!g) { g = { group: gn, members: [] }; groups.set(gn, g); items.push(g); }
+        g.members.push([name, t]);
+      }
     }
     render(items);
   }

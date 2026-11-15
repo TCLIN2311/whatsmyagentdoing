@@ -8,7 +8,8 @@
 // Name tag and role come from an optional team.json next to the agent file
 // (<dir of the real .md>/<name>/team.json: { "title", "role" }), otherwise
 // from the agent's frontmatter. An optional "group" (e.g. one workflow; a string or
-// a list of names) folds its members into a single collapsible plate on the team board. An optional "look" object in team.json gives
+// a list of names) folds its members into a single collapsible plate on the team board; an optional
+// numeric "order" (e.g. the workflow step) lists them in that order there. An optional "look" object in team.json gives
 // the resident a custom outfit in the 2D office (see public/office.js newPerson).
 
 const fs = require('fs');
@@ -66,6 +67,7 @@ function residents() {
       name,
       label: t.title || name,
       group: groups(t.group),
+      order: Number.isFinite(t.order) ? t.order : null,
       role: t.role || (fm.description || '').split(/[。.]/)[0].slice(0, 80),
       look: t.look && typeof t.look === 'object' ? t.look : null,
       startedAt: stamp(path.join(AGENTS_DIR, f)),
@@ -103,6 +105,7 @@ function apply(sessions, raw, now, opts = {}) {
     v.residentOf = r.name;
     v.residentLabel = r.label;
     v.residentGroup = r.group;
+    v.residentOrder = r.order;
     if (r.look) v.look = r.look;
   }
   // Sort residents ahead of recently finished sessions so they never "go home";
@@ -121,6 +124,7 @@ function apply(sessions, raw, now, opts = {}) {
       residentOf: r.name,
       residentLabel: r.label,
       residentGroup: r.group,
+      residentOrder: r.order,
       look: r.look,
       cwd: null,
       project: r.label,

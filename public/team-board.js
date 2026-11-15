@@ -100,7 +100,7 @@
     const team = new Map();
     for (const s of state.data.sessions || []) {
       if (!s.residentOf) continue;
-      const t = team.get(s.residentOf) || { label: s.residentLabel || s.residentOf, group: s.residentGroup || null, on: false, key: s.key };
+      const t = team.get(s.residentOf) || { label: s.residentLabel || s.residentOf, group: s.residentGroup || null, order: s.residentOrder ?? null, on: false, key: s.key };
       if (ACTIVE.has(s.status)) { t.on = true; t.key = s.key; }
       team.set(s.residentOf, t);
     }
@@ -121,6 +121,10 @@
         g.members.push([name, t]);
       }
     }
+    // Within a group, members follow team.json "order" (workflow steps, first
+    // on top); members without one go last, by name.
+    const rank = (t) => (t.order == null ? Infinity : t.order);
+    for (const g of groups.values()) g.members.sort((a, b) => rank(a[1]) - rank(b[1]) || a[0].localeCompare(b[0]));
     render(items);
   }
   document.addEventListener('click', (e) => {

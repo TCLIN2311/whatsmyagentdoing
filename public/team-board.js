@@ -44,10 +44,13 @@
   const open = new Set(); // group names the user has expanded
   let last = '';
 
-  function plate(name, t) {
+  // Inside a group the group name is already on the head plate, so a member
+  // label that starts with it drops the prefix ("室內裝修合約" → "合約").
+  function plate(name, t, group) {
     const el = document.createElement('div');
     el.className = 'plate' + (t.on ? ' on' : '');
-    el.textContent = t.label;
+    const short = group && t.label.startsWith(group) ? t.label.slice(group.length).trim() : '';
+    el.textContent = short || t.label;
     el.title = `${name}${t.on ? '（工作中）' : '（待命）'}`;
     // Click again on the plate whose details are showing to fold the side panel away.
     el.onclick = (e) => {
@@ -84,7 +87,7 @@
       };
       const list = document.createElement('div');
       list.className = 'members';
-      list.append(...it.members.map(([name, t]) => plate(name, t)));
+      list.append(...it.members.map(([name, t]) => plate(name, t, it.group)));
       wrap.append(head, list);
       return wrap;
     }));

@@ -47,6 +47,13 @@
       font: 600 12px/18px ui-sans-serif, system-ui, -apple-system, "PingFang TC", sans-serif;
       letter-spacing: .2em; color: #8a8a8a; background: #141414; }
     #teamBoard .section.on > .legend { color: rgb(${LIGHT}); }
+    /* 畫面窄到名牌要換行時：名牌縮小；還是換行時，建築設計框改成封閉的框，不留斷掉的框線。 */
+    #teamBoard.compact { gap: 6px; padding: 0 8px; }
+    #teamBoard.compact .plate { font-size: 12px; letter-spacing: .03em; padding: 6px 9px; }
+    #teamBoard.compact .group > .plate .count, #teamBoard.compact .group > .plate .caret { margin-left: 4px; }
+    #teamBoard.compact .section { gap: 6px; padding: 14px 6px 0; }
+    #teamBoard.wrapped .section { padding-bottom: 6px; border-bottom: 1px solid #3a3a3a; border-radius: 8px; }
+    #teamBoard.wrapped .section.on { border-bottom-color: rgba(${LIGHT}, .45); }
   `;
   document.head.appendChild(css);
 
@@ -182,7 +189,22 @@
       s.groups.sort((a, b) => at(a.group) - at(b.group));
     }
     render(out);
+    fit();
   }
+
+  // 名牌排不下一列時先縮小（compact），縮小後還是換行就標 wrapped。
+  function fit() {
+    // 建築設計框比單獨的名牌高、上緣也低幾 px，所以用「下一個比第一個低超過 24px」才算換行。
+    const rows = () => {
+      const tops = [...board.children].map((c) => c.getBoundingClientRect().top);
+      return tops.some((t) => t - Math.min(...tops) > 24) ? 2 : 1;
+    };
+    board.classList.remove('compact', 'wrapped');
+    if (!board.children.length || rows() <= 1) return;
+    board.classList.add('compact');
+    if (rows() > 1) board.classList.add('wrapped');
+  }
+  addEventListener('resize', fit);
   document.addEventListener('click', (e) => {
     if (!open.size || board.contains(e.target)) return;
     open.clear();

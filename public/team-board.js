@@ -4,7 +4,9 @@
 // state.data.sessions, where src/residents.js tags entries with residentOf.
 // Agents sharing a team.json "group" (a name, or a list of names) fold into one collapsible plate
 // (e.g. "都市更新 ▸"); click it to show the member plates below. The group
-// plate lights up when any member is working. Clicking a plate opens that
+// plate lights up when any member is working. Groups whose members share a team.json
+// "section" (e.g. "建築設計") sit side by side under one labelled bracket; each of
+// them is still a collapsible plate ("都市更新 ▸", "危老重建 ▸", "素地新建 ▸"). Clicking a plate opens that
 // agent in the side panel; clicking the same plate again folds the panel away.
 (() => {
   if (new URLSearchParams(location.search).get('pip') === '1') return;
@@ -36,6 +38,15 @@
       border: 1px solid #2c2c2c; pointer-events: auto; }
     #teamBoard .group.open > .members { display: flex; }
     #teamBoard .members .plate { text-align: center; }
+    #teamBoard .section { position: relative; pointer-events: none; display: flex; align-items: flex-start;
+      gap: 10px; padding: 16px 10px 0; margin-top: 4px; border: 1px solid #3a3a3a; border-bottom: none;
+      border-radius: 8px 8px 0 0; transition: border-color .6s, box-shadow .6s; }
+    #teamBoard .section.on { border-color: rgba(${LIGHT}, .45); }
+    #teamBoard .section > .legend { position: absolute; top: -9px; left: 50%; transform: translateX(-50%);
+      padding: 0 10px; white-space: nowrap;
+      font: 600 12px/18px ui-sans-serif, system-ui, -apple-system, "PingFang TC", sans-serif;
+      letter-spacing: .2em; color: #8a8a8a; background: #141414; }
+    #teamBoard .section.on > .legend { color: rgb(${LIGHT}); }
   `;
   document.head.appendChild(css);
 
@@ -65,7 +76,22 @@
 
   function render(items) {
     board.replaceChildren(...items.map((it) => {
+      if (it.section) {
+        const box = document.createElement('div');
+        box.className = 'section' + (it.groups.some((g) => g.members.some(([, t]) => t.on)) ? ' on' : '');
+        const legend = document.createElement('span');
+        legend.className = 'legend';
+        legend.textContent = it.section;
+        box.append(legend, ...it.groups.map(groupEl));
+        return box;
+      }
       if (!it.group) return plate(it.name, it);
+      return groupEl(it);
+    }));
+  }
+
+  function groupEl(it) {
+    {
       const wrap = document.createElement('div');
       wrap.className = 'group' + (open.has(it.group) ? ' open' : '');
       const head = document.createElement('div');
@@ -90,7 +116,7 @@
       list.append(...it.members.map(([name, t]) => plate(name, t, it.group)));
       wrap.append(head, list);
       return wrap;
-    }));
+    }
   }
 
   function tick() {
@@ -100,7 +126,7 @@
     const team = new Map();
     for (const s of state.data.sessions || []) {
       if (!s.residentOf) continue;
-      const t = team.get(s.residentOf) || { label: s.residentLabel || s.residentOf, group: s.residentGroup || null, order: s.residentOrder ?? null, on: false, key: s.key };
+      const t = team.get(s.residentOf) || { label: s.residentLabel || s.residentOf, group: s.residentGroup || null, order: s.residentOrder ?? null, section: s.residentSection || null, on: false, key: s.key };
       if (ACTIVE.has(s.status)) { t.on = true; t.key = s.key; }
       team.set(s.residentOf, t);
     }
@@ -123,9 +149,33 @@
     }
     // Within a group, members follow team.json "order" (workflow steps, first
     // on top); members without one go last, by name.
-    const rank = (t) => (t.order == null ? Infinity : t.order);
-    for (const g of groups.values()) g.members.sort((a, b) => rank(a[1]) - rank(b[1]) || a[0].localeCompare(b[0]));
-    render(items);
+    // "order" may be one number, or { "<group>": n } for an agent in several groups.
+    const rank = (t, gn) => {
+      const o = t.order && typeof t.order === 'object' ? t.order[gn] : t.order;
+      return Number.isFinite(o) ? o : Infinity;
+    };
+    for (const g of groups.values()) g.members.sort((a, b) => rank(a[1], g.group) - rank(b[1], g.group) || a[0].localeCompare(b[0]));
+    // Groups of the same "section" go into one bracket, at the slot of the first of them,
+    // in the order of the longest group list a member gives (e.g. 都市更新、危老重建、素地新建).
+    const out = [];
+    const sections = new Map();
+    for (const it of items) {
+      const sec = it.group && it.members.map(([, t]) => t.section).find(Boolean);
+      if (!sec) { out.push(it); continue; }
+      let s = sections.get(sec);
+      if (!s) { s = { section: sec, groups: [] }; sections.set(sec, s); out.push(s); }
+      s.groups.push(it);
+    }
+    for (const s of sections.values()) {
+      let canon = [];
+      for (const g of s.groups) for (const [, t] of g.members) {
+        const l = Array.isArray(t.group) ? t.group : [t.group];
+        if (l.length > canon.length) canon = l;
+      }
+      const at = (n) => { const i = canon.indexOf(n); return i < 0 ? Infinity : i; };
+      s.groups.sort((a, b) => at(a.group) - at(b.group));
+    }
+    render(out);
   }
   document.addEventListener('click', (e) => {
     if (!open.size || board.contains(e.target)) return;

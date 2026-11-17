@@ -126,8 +126,13 @@
     const team = new Map();
     for (const s of state.data.sessions || []) {
       if (!s.residentOf) continue;
-      const t = team.get(s.residentOf) || { label: s.residentLabel || s.residentOf, group: s.residentGroup || null, order: s.residentOrder ?? null, section: s.residentSection || null, on: false, key: s.key };
-      if (ACTIVE.has(s.status)) { t.on = true; t.key = s.key; }
+      const t = team.get(s.residentOf) || { label: s.residentLabel || s.residentOf, group: s.residentGroup || null, order: s.residentOrder ?? null, section: s.residentSection || null, on: false, cases: [], key: s.key };
+      if (ACTIVE.has(s.status)) {
+        t.on = true; t.key = s.key;
+        // cases: the groups this agent is working for; null = all of its groups (unknown case type).
+        if (!s.residentCase) t.cases = null;
+        else if (t.cases && !t.cases.includes(s.residentCase)) t.cases.push(s.residentCase);
+      }
       team.set(s.residentOf, t);
     }
     const sorted = [...team.entries()].sort((a, b) => a[0].localeCompare(b[0]));
@@ -144,7 +149,8 @@
       for (const gn of names) {
         let g = groups.get(gn);
         if (!g) { g = { group: gn, members: [] }; groups.set(gn, g); items.push(g); }
-        g.members.push([name, t]);
+        // In a group the agent is not working for, its plate stays dark.
+        g.members.push([name, t.on && t.cases && t.cases.length && !t.cases.includes(gn) ? { ...t, on: false } : t]);
       }
     }
     // Within a group, members follow team.json "order" (workflow steps, first

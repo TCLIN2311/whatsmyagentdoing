@@ -14,6 +14,12 @@
 // An optional "section" (e.g. "建築設計") puts this agent's groups side by side inside one labelled
 // frame on the team board; each group there stays a collapsible plate. An optional "look" object in team.json gives
 // the resident a custom outfit in the 2D office (see public/office.js newPerson).
+//
+// Case type: when a working agent belongs to several groups, the task it was given decides
+// which group's plate lights up. "<label>：<group>" (label 案件類型 / case type) wins; otherwise a
+// group counts as named when its name, or one of its aliases in an optional team-match.json next
+// to the agent files ({ "<group>": ["alias", ...] }), appears in the task. Exactly one named
+// group → only that plate lights; none or several → every group of the agent lights, as before.
 
 const fs = require('fs');
 
@@ -58,6 +64,28 @@ function groups(g) {
   return list.length ? [...new Set(list)] : null;
 }
 
+// Aliases per group name, from team-match.json in the real agents folder(s).
+let matchCache = { key: '', map: {} };
+function aliases(files) {
+  const dirs = [...new Set(files.map((f) => {
+    try { return path.dirname(fs.realpathSync(path.join(AGENTS_DIR, f))); } catch { return null; }
+  }).filter(Boolean))];
+  const stamp = (f) => { try { return fs.statSync(f).mtimeMs; } catch { return 0; } };
+  const key = dirs.map((d) => `${d}:${stamp(path.join(d, 'team-match.json'))}`).join('|');
+  if (key === matchCache.key) return matchCache.map;
+  const map = {};
+  for (const d of dirs) {
+    let j;
+    try { j = JSON.parse(fs.readFileSync(path.join(d, 'team-match.json'), 'utf8')); } catch { continue; }
+    for (const [g, l] of Object.entries(j || {})) {
+      if (!Array.isArray(l)) continue;
+      map[g] = [...new Set([...(map[g] || []), ...l.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim())])];
+    }
+  }
+  matchCache = { key, map };
+  return map;
+}
+
 // Cached by file times, so a new or edited agent shows up within seconds.
 function residents() {
   let files = [];
@@ -85,6 +113,8 @@ function residents() {
       startedAt: stamp(path.join(AGENTS_DIR, f)),
     });
   }
+  const al = aliases(files);
+  for (const r of list) r.match = r.group && r.group.length > 1 ? Object.fromEntries(r.group.map((g) => [g, [g, ...(al[g] || [])]])) : null;
   cache = { key, list };
   return list;
 }
@@ -100,6 +130,41 @@ function agentType(file) {
   return t;
 }
 
+// The task a subagent was given: the first user message of its transcript.
+const taskCache = new Map();
+function firstTask(file) {
+  if (!file) return '';
+  if (taskCache.has(file)) return taskCache.get(file);
+  let text = '';
+  try {
+    const fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(256 * 1024);
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    fs.closeSync(fd);
+    for (const line of buf.toString('utf8', 0, n).split('\n')) {
+      let e; try { e = JSON.parse(line); } catch { continue; }
+      if (e.type !== 'user' || !e.message) continue;
+      const c = e.message.content;
+      text = typeof c === 'string' ? c : Array.isArray(c) ? c.filter((p) => p && p.type === 'text').map((p) => p.text).join('\n') : '';
+      if (text) break;
+    }
+  } catch {}
+  if (text) taskCache.set(file, text);
+  return text;
+}
+
+// Which one of the agent's groups this task belongs to, or null (unknown / several).
+function caseGroup(r, task) {
+  if (!r.match || !task) return null;
+  const label = /(?:案件類型|case type)\s*[:：=＝]\s*(\S+)/i.exec(task);
+  if (label) {
+    const hit = r.group.filter((g) => r.match[g].some((w) => label[1].includes(w)));
+    if (hit.length === 1) return hit[0];
+  }
+  const hit = r.group.filter((g) => r.match[g].some((w) => task.includes(w)));
+  return hit.length === 1 ? hit[0] : null;
+}
+
 // sessions: the view() list from server.js (modified in place); raw: watcher sessions.
 function apply(sessions, raw, now, opts = {}) {
   if (opts.demo) return;
@@ -110,8 +175,10 @@ function apply(sessions, raw, now, opts = {}) {
   const rawByKey = new Map(raw.map((s) => [`${s.agent}:${s.id}`, s]));
   for (const v of sessions) {
     if (v.agent !== 'claude' || !v.subagent) continue;
-    const r = byName.get(agentType((rawByKey.get(v.key) || {}).file));
+    const file = (rawByKey.get(v.key) || {}).file;
+    const r = byName.get(agentType(file));
     if (!r || !ACTIVE.has(v.status)) continue;
+    v.residentCase = caseGroup(r, firstTask(file));
     busy.add(r.name);
     v.project = r.label;
     v.residentOf = r.name;
@@ -159,4 +226,4 @@ function apply(sessions, raw, now, opts = {}) {
   }
 }
 
-module.exports = { apply, residents };
+module.exports = { apply, residents, caseGroup, firstTask };

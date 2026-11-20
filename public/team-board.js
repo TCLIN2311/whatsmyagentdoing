@@ -7,6 +7,9 @@
 // plate lights up when any member is working. Groups whose members share a team.json
 // "section" (e.g. "建築設計") sit side by side under one labelled bracket; each of
 // them is still a collapsible plate ("都市更新 ▸", "危老重建 ▸", "素地新建 ▸"). Clicking a plate opens that
+// Members of a group that share a team.json
+// "subgroup" (e.g. "室內裝修申請") fold into one nested collapsible plate inside that group's list,
+// at the slot of the first of them. Clicking a plate opens that
 // agent in the side panel; clicking the same plate again folds the panel away.
 (() => {
   if (new URLSearchParams(location.search).get('pip') === '1') return;
@@ -38,6 +41,10 @@
       border: 1px solid #2c2c2c; pointer-events: auto; }
     #teamBoard .group.open > .members { display: flex; }
     #teamBoard .members .plate { text-align: center; }
+    /* 子群組（例如 室內裝修 ▸ 申請 ▸）：收在上層清單裡，點開後成員縮排列在它下面。 */
+    #teamBoard .members .group { pointer-events: auto; display: flex; flex-direction: column; align-items: stretch; }
+    #teamBoard .members .group > .members { position: static; transform: none; margin: 6px 0 0 10px; padding: 0 0 0 6px;
+      border: none; border-left: 1px solid #3a3a3a; border-radius: 0; background: none; }
     #teamBoard .section { position: relative; pointer-events: none; display: flex; align-items: flex-start;
       gap: 10px; padding: 16px 10px 0; margin-top: 4px; border: 1px solid #3a3a3a; border-bottom: none;
       border-radius: 8px 8px 0 0; transition: border-color .6s, box-shadow .6s; }
@@ -97,14 +104,16 @@
     }));
   }
 
-  function groupEl(it) {
+  // parent: the group this one is nested in (a subgroup), if any.
+  function groupEl(it, parent) {
     {
+      const id = parent ? `${parent}/${it.group}` : it.group;
       const wrap = document.createElement('div');
-      wrap.className = 'group' + (open.has(it.group) ? ' open' : '');
+      wrap.className = 'group' + (open.has(id) ? ' open' : '');
       const head = document.createElement('div');
       const busy = it.members.filter(([, t]) => t.on).length;
       head.className = 'plate' + (busy ? ' on' : '');
-      head.textContent = it.group;
+      head.textContent = parent && it.group.startsWith(parent) ? it.group.slice(parent.length).trim() || it.group : it.group;
       const count = document.createElement('span');
       count.className = 'count';
       count.textContent = busy ? `${busy}/${it.members.length}` : String(it.members.length);
@@ -115,12 +124,22 @@
       head.title = `${it.group}：${it.members.map(([, t]) => t.label).join('、')}`;
       head.onclick = (e) => {
         e.stopPropagation();
-        if (open.has(it.group)) open.delete(it.group); else open.add(it.group);
-        wrap.classList.toggle('open', open.has(it.group));
+        if (open.has(id)) open.delete(id); else open.add(id);
+        wrap.classList.toggle('open', open.has(id));
       };
       const list = document.createElement('div');
       list.className = 'members';
-      list.append(...it.members.map(([name, t]) => plate(name, t, it.group)));
+      // Members sharing a "subgroup" fold into one nested group at the slot of the first of them.
+      const subs = new Map();
+      const rows = [];
+      for (const m of it.members) {
+        const sn = !parent && m[1].subgroup;
+        if (!sn) { rows.push(m); continue; }
+        let sg = subs.get(sn);
+        if (!sg) { sg = { group: sn, members: [] }; subs.set(sn, sg); rows.push(sg); }
+        sg.members.push(m);
+      }
+      list.append(...rows.map((r) => (Array.isArray(r) ? plate(r[0], r[1], parent ? null : it.group) : groupEl(r, it.group))));
       wrap.append(head, list);
       return wrap;
     }
@@ -133,7 +152,7 @@
     const team = new Map();
     for (const s of state.data.sessions || []) {
       if (!s.residentOf) continue;
-      const t = team.get(s.residentOf) || { label: s.residentLabel || s.residentOf, group: s.residentGroup || null, order: s.residentOrder ?? null, section: s.residentSection || null, on: false, cases: [], key: s.key };
+      const t = team.get(s.residentOf) || { label: s.residentLabel || s.residentOf, group: s.residentGroup || null, order: s.residentOrder ?? null, section: s.residentSection || null, subgroup: s.residentSubgroup || null, on: false, cases: [], key: s.key };
       if (ACTIVE.has(s.status)) {
         t.on = true; t.key = s.key;
         // cases: the groups this agent is working for; null = all of its groups (unknown case type).

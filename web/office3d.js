@@ -21,6 +21,14 @@ const STATUS_COLOR = {
   thinking: 0x8b6be6, tool: 0x3b8ee0, typing: 0x22a874, waiting: 0xe09412, error: 0xde4b40,
 };
 const CHAR_HEIGHT = 0.92; // world units (≈ tiles)
+// Agents are drawn as jelly slimes; these residents (and LIN's own sessions) stay human.
+const SLIME_EXEMPT = new Set(['virtual-lin']);
+const SLIME_COLORS = [
+  { body: '#f0848a', core: '#ffd3d3', blush: '#e0505f', leaf: '#5fb55a' }, // pink
+  { body: '#f4a35f', core: '#ffe2bf', blush: '#e06a3a', leaf: '#4fa44c' }, // orange
+  { body: '#9d93d8', core: '#e2ddff', blush: '#e07aa8', leaf: '#5fb55a' }, // purple
+  { body: '#9fd27a', core: '#e6f7d4', blush: '#e88a7a', leaf: '#3f8a3a' }, // green
+];
 const WALL_H = 2.4;
 const SIT_FORWARD = 0.16;
 
@@ -1395,7 +1403,15 @@ export class Office3D extends window.Office {
   actorFor(p) {
     let a = this.actors.get(p.key);
     if (a) return a;
-    const gltf = this.chars[p.h % this.chars.length];
+    // LIN stays human: his own main sessions (not a subagent, not a resident)
+    // and the virtual-lin agent. Every other agent becomes a slime.
+    const isLin = !p.s || SLIME_EXEMPT.has(p.s.residentOf) || (!p.s.subagent && !p.s.resident && !p.s.residentOf);
+    if (!isLin) {
+      a = this.slimeActor(p);
+      this.actors.set(p.key, a);
+      return a;
+    }
+    const gltf =this.chars[p.h % this.chars.length];
     const obj = cloneSkinned(gltf.scene);
     if (p.look) { try { this.dress(obj, p.look); } catch (e) { console.warn('outfit:', e); } }
     obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
@@ -1415,6 +1431,199 @@ export class Office3D extends window.Office {
     a = { obj, mixer, actions, current: null, head, headRest: head ? head.rotation.x : 0, armR, prop, cup, book, yaw: 0, last: { x: p.x, y: p.y } };
     this.actors.set(p.key, a);
     return a;
+  }
+
+  // Original jelly slime: a soft glossy dome with a lighter core, two shiny
+  // oval eyes, blush cheeks and a little two-leaf sprout on top. Built with
+  // its base at the origin so squash-and-stretch keeps it on the floor.
+  slimeActor(p) {
+    const col = SLIME_COLORS[p.h % SLIME_COLORS.length];
+    const size = p.s && p.s.subagent ? 0.8 : 1;
+    const H = 0.5 * size, R = 0.33 * size;
+    const root = new THREE.Group();
+    const inner = new THREE.Group(); // squashes and hops
+    root.add(inner);
+    const cache = this._slimeMats || (this._slimeMats = new Map());
+    const matFor = (key, make) => cache.get(key) || (cache.set(key, make()), cache.get(key));
+    // body: a sphere flattened at the bottom, wider at the base than the top
+    const g = new THREE.SphereGeometry(1, 40, 28);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      if (y < -0.35) y = -0.35 + (y + 0.35) * 0.25;            // flat-ish underside
+      const widen = 1 + 0.18 * Math.max(0, 0.2 - y);             // bottom spreads out
+      pos.setXYZ(i, x * widen, y, z * widen);
+    }
+    g.computeVertexNormals();
+    g.computeBoundingBox();
+    const by = g.boundingBox.min.y, bh = g.boundingBox.max.y - by;
+    g.translate(0, -by, 0);
+    g.scale(R, H / bh, R);
+    const bodyMat = matFor('body' + col.body, () => new THREE.MeshPhysicalMaterial({
+      color: col.body, roughness: 0.08, clearcoat: 1, clearcoatRoughness: 0.04,
+      sheen: 0.8, sheenColor: new THREE.Color(col.core), transparent: true, opacity: 0.76,
+      depthWrite: false, specularIntensity: 1,
+    }));
+    const body = new THREE.Mesh(g, bodyMat);
+    body.castShadow = true; body.renderOrder = 2; // drawn after the core and face so they show through
+    inner.add(body);
+    // lighter core glowing through the jelly
+    const core = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14),
+      matFor('core' + col.core, () => new THREE.MeshStandardMaterial({ color: col.core, roughness: 0.4, transparent: true, opacity: 0.7, emissive: col.core, emissiveIntensity: 0.25 })));
+    core.scale.set(R * 0.55, H * 0.34, R * 0.55);
+    core.position.y = H * 0.38;
+    inner.add(core);
+    // eyes: dark glossy ovals with a white sparkle
+    const eyeMat = matFor('eye', () => new THREE.MeshStandardMaterial({ color: 0x1d1a1f, roughness: 0.1, metalness: 0.2 }));
+    const hiMat = matFor('hi', () => new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    const blushMat = matFor('blush' + col.blush, () => new THREE.MeshBasicMaterial({ color: col.blush, transparent: true, opacity: 0.75 }));
+    const surface = (yFrac, xOff) => { // a point just on the front of the body
+      const y = H * yFrac;
+      const t = Math.min(0.999, Math.max(-0.999, (y / H) * 2 - 0.62));
+      const r = R * Math.sqrt(1 - t * t) * 1.08;
+      return new THREE.Vector3(xOff, y, Math.sqrt(Math.max(0, r * r - xOff * xOff)));
+    };
+    for (const sx of [-1, 1]) {
+      const ep = surface(0.5, sx * R * 0.34);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), eyeMat);
+      eye.scale.set(R * 0.1, R * 0.15, R * 0.06);
+      eye.position.copy(ep);
+      inner.add(eye);
+      const hi = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), hiMat);
+      hi.scale.setScalar(R * 0.035);
+      hi.position.set(ep.x - R * 0.03, ep.y + R * 0.05, ep.z + R * 0.05);
+      inner.add(hi);
+      const bp = surface(0.34, sx * R * 0.58);
+      const blush = new THREE.Mesh(new THREE.CircleGeometry(R * 0.1, 16), blushMat);
+      blush.scale.y = 0.6;
+      blush.position.copy(bp);
+      blush.lookAt(bp.clone().add(new THREE.Vector3(bp.x, 0, bp.z)));
+      blush.position.addScaledVector(new THREE.Vector3(bp.x, 0, bp.z).normalize(), 0.004);
+      inner.add(blush);
+    }
+    // sprout: short stem and two leaves
+    const leafMat = matFor('leaf' + col.leaf, () => new THREE.MeshStandardMaterial({ color: col.leaf, roughness: 0.5, side: THREE.DoubleSide }));
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.025, R * 0.035, H * 0.16, 6), leafMat);
+    stem.position.y = H + H * 0.06;
+    inner.add(stem);
+    for (const sx of [-1, 1]) {
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), leafMat);
+      leaf.scale.set(R * 0.16, R * 0.035, R * 0.09);
+      leaf.position.set(sx * R * 0.13, H + H * 0.15, 0);
+      leaf.rotation.z = sx * 0.45;
+      inner.add(leaf);
+    }
+    root.traverse((o) => { if (o.isMesh && o !== body) o.castShadow = false; });
+    const prop = new THREE.Group();
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.1, 10), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    const book = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.28, 0.04), new THREE.MeshStandardMaterial({ color: 0xc96442 }));
+    prop.add(cup, book);
+    prop.visible = false;
+    // landing burst: a white manga-style splash lying flat on the floor
+    // under the slime; the body is drawn after it, so it covers the middle
+    const fxMat = new THREE.MeshBasicMaterial({ map: this.splashTexture(p.h), transparent: true, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const fx = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), fxMat);
+    fx.rotation.x = -Math.PI / 2;
+    fx.position.y = 0.006;
+    fx.renderOrder = 1;
+    fx.visible = false;
+    root.add(fx);
+    this.scene.add(root, prop);
+    return {
+      obj: root, mixer: new THREE.AnimationMixer(root), actions: {}, current: null, head: null, headRest: 0,
+      armR: null, prop, cup, book, yaw: 0, last: { x: p.x, y: p.y }, slime: { inner, H, R, fx, fxMat, fxT: 1, lastPh: 0 },
+    };
+  }
+
+  // Squash, stretch and hop for a slime actor.
+  bounceSlime(a, p, st, dt) {
+    const t = this.t / 1000 + p.phase;
+    const s = a.slime;
+    let sy = 1, lift = 0;
+    if (st.pose === 'walk') {
+      const ph = (t * 2.4) % 1;                       // one hop per cycle
+      lift = Math.sin(ph * Math.PI) * s.H * 0.35;
+      sy = ph < 0.12 ? 0.72 + ph * 2.3 : ph > 0.9 ? 1 - (ph - 0.9) * 2 : 1.08;
+      if (ph < s.lastPh) s.fxT = 0;                   // just landed
+      s.lastPh = ph;
+    } else if (st.act === 'nap') {
+      sy = 0.8 + Math.sin(t * 1.2) * 0.03;
+    } else {
+      sy = 1 + Math.sin(t * 2.6) * 0.045;
+      if (p.s && ['thinking', 'tool', 'typing'].includes(p.s.status)) sy += Math.sin(t * 9) * 0.02;
+    }
+    const sx = 1 / Math.sqrt(sy);
+    s.inner.scale.set(sx, sy, sx);
+    s.inner.position.y = lift;
+    a.prop.visible = false;
+    // landing burst
+    const DUR = 0.34;
+    if (s.fxT < DUR) {
+      s.fxT += dt;
+      const k = Math.min(1, s.fxT / DUR);
+      const pop = k < 0.3 ? 0.55 + (k / 0.3) * 0.55 : 1.1 + (k - 0.3) * 0.15; // burst out, then hang
+      s.fx.visible = true;
+      s.fx.scale.set(s.R * 3.6 * pop, s.R * 3.6 * pop, 1);
+      s.fxMat.opacity = k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45;
+    } else s.fx.visible = false;
+  }
+
+  // White comic splash drawn on a canvas: a puffy cloud core with jagged,
+  // tapering spikes and a few flying drops, outlined so it reads on any floor.
+  // Three variants, picked per slime.
+  splashTexture(h) {
+    this._splash ||= [];
+    const v = h % 3;
+    if (this._splash[v]) return this._splash[v];
+    let seed = 1234 + v * 977;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const S = 256, c = S / 2;
+    const cv = document.createElement('canvas'); cv.width = cv.height = S;
+    const g = cv.getContext('2d');
+    const N = 13;
+    const pts = [];
+    for (let i = 0; i < N; i++) {
+      const a0 = (i / N) * Math.PI * 2 + (rnd() - 0.5) * 0.25;
+      pts.push({ a: a0, tip: 70 + rnd() * 52 * (i % 2 ? 0.7 : 1), w: 0.1 + rnd() * 0.08, bend: (rnd() - 0.5) * 0.35 });
+    }
+    const P = (a, r) => [c + Math.cos(a) * r, c + Math.sin(a) * r * 0.82];
+    g.beginPath();
+    for (let i = 0; i < N; i++) {
+      const s0 = pts[i], s1 = pts[(i + 1) % N];
+      const a1 = s1.a < s0.a ? s1.a + Math.PI * 2 : s1.a;
+      const base = 40 + rnd() * 8;
+      const [bx, by] = P(s0.a - s0.w, base);
+      if (i === 0) g.moveTo(bx, by); else g.lineTo(bx, by);
+      // spike: curved, tapering to a point
+      const [tx, ty] = P(s0.a + s0.bend * 0.4, s0.tip);
+      const [m1x, m1y] = P(s0.a - s0.w * 0.4 + s0.bend * 0.3, base + (s0.tip - base) * 0.55);
+      const [ex, ey] = P(s0.a + s0.w, base);
+      const [m2x, m2y] = P(s0.a + s0.w * 0.4 + s0.bend * 0.3, base + (s0.tip - base) * 0.55);
+      g.quadraticCurveTo(m1x, m1y, tx, ty);
+      g.quadraticCurveTo(m2x, m2y, ex, ey);
+      // puffy bump between this spike and the next
+      const mid = (s0.a + s0.w + a1 - s1.w) / 2;
+      const [qx, qy] = P(mid, base + 14 + rnd() * 10);
+      const [nx, ny] = P(a1 - s1.w, 40 + rnd() * 8);
+      g.quadraticCurveTo(qx, qy, nx, ny);
+    }
+    g.closePath();
+    g.fillStyle = '#ffffff';
+    g.strokeStyle = '#26262b';
+    g.lineWidth = 5; g.lineJoin = 'round';
+    g.stroke(); g.fill();
+    // flying drops
+    for (let i = 0; i < 7; i++) {
+      const a = rnd() * Math.PI * 2, r = 88 + rnd() * 30, sz = 3 + rnd() * 5;
+      const [x, y] = P(a, r);
+      g.beginPath(); g.ellipse(x, y, sz, sz * 0.7, a, 0, Math.PI * 2);
+      g.lineWidth = 3; g.stroke(); g.fill();
+    }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    this._splash[v] = tex;
+    return tex;
   }
 
   // Recolour a Kenney character from a resident's "look" (team.json) and add
@@ -1559,9 +1768,11 @@ export class Office3D extends window.Office {
       if (look.coat) {
         const skirt = new THREE.Mesh(new THREE.BoxGeometry(s.x * 1.04, s.y * 0.6, s.z * 1.06), mat(C.jacket, { roughness: 0.85 }));
         add(torsoBone, skirt, new THREE.Vector3(c.x, tb.min.y - s.y * 0.26, c.z));
+        (obj.userData.coatHem ||= []).push(skirt);
         if (look.inner) {
           const gap = new THREE.Mesh(new THREE.BoxGeometry(s.x * 0.3, s.y * 0.6, 0.01), mat(col(look.inner, '#f4f4f1'), { roughness: 0.9 }));
           add(torsoBone, gap, new THREE.Vector3(c.x, tb.min.y - s.y * 0.26, c.z + s.z * 0.53 + 0.004));
+          obj.userData.coatHem.push(gap);
         }
       }
     }
@@ -1637,6 +1848,9 @@ export class Office3D extends window.Office {
         a.yaw += dt * 0.35;
       }
       a.obj.position.set(p.x + Math.sin(a.yaw) * fwd, seatY + lift, p.y + Math.cos(a.yaw) * fwd);
+      if (a.slime) { this.bounceSlime(a, p, st, dt); continue; }
+      // a coat's hem is a stiff box: seated, it pokes out both sides of the chair
+      if (a.obj.userData.coatHem) for (const m of a.obj.userData.coatHem) m.visible = st.pose !== 'sit';
       if (a.head) {
         if (st.act === 'nap') { a.head.rotation.x = a.headRest + 0.55; a.napped = true; }
         else if (a.napped) { a.head.rotation.x = a.headRest; a.napped = false; }
@@ -1785,7 +1999,9 @@ export class Office3D extends window.Office {
       const scale = p.s.subagent ? 0.8 : 1;
       const base = this.plan.terrain && st.pose !== 'sit' ? this.groundHeight(p.x, p.y) : 0;
       const floatUp = st.pose !== 'walk' && p.poi && p.poi.float ? 0.45 + Math.sin((this.t / 1000 + p.phase) * 0.9) * 0.18 : 0;
-      const top = (st.pose === 'sit' ? this.seatHeight(p.x, p.y, st.sitZ) + CHAR_HEIGHT * 0.8 * scale : base + CHAR_HEIGHT * scale) + floatUp;
+      const act = this.actors.get(p.key);
+      const ch = act && act.slime ? act.slime.H * 1.3 / scale : CHAR_HEIGHT;
+      const top = (st.pose === 'sit' ? this.seatHeight(p.x, p.y, st.sitZ) + ch * (act && act.slime ? 1 : 0.8) * scale : base + ch * scale) + floatUp;
       v.set(p.x, top + 0.05, p.y).project(this.camera);
       const sx = (v.x + 1) / 2 * this.cw, sy = (1 - v.y) / 2 * this.ch;
       const foot = new THREE.Vector3(p.x, 0, p.y).project(this.camera);

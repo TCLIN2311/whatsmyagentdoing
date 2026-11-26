@@ -23,6 +23,8 @@ const STATUS_COLOR = {
 const CHAR_HEIGHT = 0.92; // world units (≈ tiles)
 // Agents are drawn as jelly slimes; these residents (and LIN's own sessions) stay human.
 const SLIME_EXEMPT = new Set(['virtual-lin']);
+// A session working inside an agent_… folder (e.g. agent_請款) is an agent.
+const inAgentFolder = (s) => /(^|[\/\\])agent_/.test(s.cwd || '') || /^agent_/.test(s.project || '');
 // LIN's outfit (same as virtual-lin's team.json), used for his own sessions
 // when virtual-lin isn't in the office to copy it from.
 const LIN_LOOK = {
@@ -1410,8 +1412,10 @@ export class Office3D extends window.Office {
     let a = this.actors.get(p.key);
     if (a) return a;
     // LIN stays human: his own main sessions (not a subagent, not a resident)
-    // and the virtual-lin agent. Every other agent becomes a slime.
-    const isLin = !p.s || SLIME_EXEMPT.has(p.s.residentOf) || (!p.s.subagent && !p.s.resident && !p.s.residentOf);
+    // and the virtual-lin agent. Every other agent becomes a slime, including
+    // main sessions run inside an agent_… workspace folder.
+    const isLin = !p.s || SLIME_EXEMPT.has(p.s.residentOf)
+      || (!p.s.subagent && !p.s.resident && !p.s.residentOf && !inAgentFolder(p.s));
     if (!isLin) {
       a = this.slimeActor(p);
       this.actors.set(p.key, a);
@@ -1422,7 +1426,7 @@ export class Office3D extends window.Office {
     // LIN's own sessions wear the virtual-lin outfit from its team.json
     // (the default black suit made his seated legs read as two black sticks)
     let look = p.look;
-    if (p.s && !p.s.residentOf && !p.s.subagent) {
+    if (p.s && !p.s.residentOf && !p.s.subagent && !inAgentFolder(p.s)) {
       look = LIN_LOOK;
       for (const q of this.people.values()) if (q.s && q.s.residentOf === 'virtual-lin' && q.s.look) { look = q.s.look; break; }
     }

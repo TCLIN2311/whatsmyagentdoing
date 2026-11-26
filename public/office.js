@@ -573,7 +573,10 @@
       const off = sessions
         .filter((s) => !WORKING.has(s.status))
         .sort((a, b) => (b.lastEventAt || 0) - (a.lastEventAt || 0));
-      const wanderers = off.slice(0, MAX_WANDERERS);
+      // LIN (the virtual-lin resident) is always in the office when off duty;
+      // the rest of the wandering spots go to the most recently active.
+      const isLin = (s) => s.residentOf === 'virtual-lin';
+      const wanderers = [...off.filter(isLin), ...off.filter((s) => !isLin(s))].slice(0, MAX_WANDERERS);
       this.offDuty = off.length - wanderers.length;
 
       const cap = this.plan.desks.length;

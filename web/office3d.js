@@ -21,12 +21,9 @@ const STATUS_COLOR = {
   thinking: 0x8b6be6, tool: 0x3b8ee0, typing: 0x22a874, waiting: 0xe09412, error: 0xde4b40,
 };
 const CHAR_HEIGHT = 0.92; // world units (≈ tiles)
-// Agents are drawn as jelly slimes; these residents (and LIN's own sessions) stay human.
+// Everyone is drawn as a jelly slime except these residents (LIN).
 const SLIME_EXEMPT = new Set(['virtual-lin']);
-// A session working inside an agent_… folder (e.g. agent_請款) is an agent.
-const inAgentFolder = (s) => /(^|[\/\\])agent_/.test(s.cwd || '') || /^agent_/.test(s.project || '');
-// LIN's outfit (same as virtual-lin's team.json), used for his own sessions
-// when virtual-lin isn't in the office to copy it from.
+// LIN's outfit (same as virtual-lin's team.json), used if it has no "look".
 const LIN_LOOK = {
   skin: '#e2b48e', hair: '#1a1714', hairStyle: 'slick', beard: true, sunglasses: '#e6d3b3', lens: '#8a6440',
   jacket: '#6e5747', inner: '#efe8da', pants: '#6e5747', shoes: '#f4f2ec',
@@ -1411,27 +1408,19 @@ export class Office3D extends window.Office {
   actorFor(p) {
     let a = this.actors.get(p.key);
     if (a) return a;
-    // LIN stays human: his own main sessions (not a subagent, not a resident)
-    // and the virtual-lin agent. Every other agent becomes a slime, including
-    // main sessions run inside an agent_… workspace folder.
-    const isLin = !p.s || SLIME_EXEMPT.has(p.s.residentOf)
-      || (!p.s.subagent && !p.s.resident && !p.s.residentOf && !inAgentFolder(p.s));
+    // Only LIN (the virtual-lin agent) stays human; everyone else, including
+    // every main session, is a slime.
+    const isLin = !!(p.s && SLIME_EXEMPT.has(p.s.residentOf));
     if (!isLin) {
       a = this.slimeActor(p);
       this.actors.set(p.key, a);
       return a;
     }
-    // LIN (his own sessions and virtual-lin) always uses the suited man with
+    // LIN always uses the suited man with
     // short combed hair, so the virtual-lin outfit reads as him
     const gltf = this.chars[CHARACTERS.indexOf('male-d')] || this.chars[p.h % this.chars.length];
     const obj = cloneSkinned(gltf.scene);
-    // LIN's own sessions wear the virtual-lin outfit from its team.json
-    // (the default black suit made his seated legs read as two black sticks)
-    let look = p.look;
-    if (p.s && !p.s.residentOf && !p.s.subagent && !inAgentFolder(p.s)) {
-      look = LIN_LOOK;
-      for (const q of this.people.values()) if (q.s && q.s.residentOf === 'virtual-lin' && q.s.look) { look = q.s.look; break; }
-    }
+    const look = p.look || LIN_LOOK;
     if (look) { try { this.dress(obj, look); } catch (e) { console.warn('outfit:', e); } }
     obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     const box = new THREE.Box3().setFromObject(obj);

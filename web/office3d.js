@@ -1421,7 +1421,9 @@ export class Office3D extends window.Office {
       this.actors.set(p.key, a);
       return a;
     }
-    const gltf =this.chars[p.h % this.chars.length];
+    // LIN (his own sessions and virtual-lin) always uses the suited man with
+    // short combed hair, so the virtual-lin outfit reads as him
+    const gltf = this.chars[CHARACTERS.indexOf('male-d')] || this.chars[p.h % this.chars.length];
     const obj = cloneSkinned(gltf.scene);
     // LIN's own sessions wear the virtual-lin outfit from its team.json
     // (the default black suit made his seated legs read as two black sticks)

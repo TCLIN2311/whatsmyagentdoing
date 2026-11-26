@@ -23,6 +23,12 @@ const STATUS_COLOR = {
 const CHAR_HEIGHT = 0.92; // world units (≈ tiles)
 // Agents are drawn as jelly slimes; these residents (and LIN's own sessions) stay human.
 const SLIME_EXEMPT = new Set(['virtual-lin']);
+// LIN's outfit (same as virtual-lin's team.json), used for his own sessions
+// when virtual-lin isn't in the office to copy it from.
+const LIN_LOOK = {
+  skin: '#e2b48e', hair: '#1a1714', hairStyle: 'slick', beard: true, sunglasses: '#e6d3b3', lens: '#8a6440',
+  jacket: '#6e5747', inner: '#efe8da', pants: '#6e5747', shoes: '#f4f2ec',
+};
 const SLIME_COLORS = [
   { body: '#f0848a', core: '#ffd3d3', blush: '#e0505f', leaf: '#5fb55a' }, // pink
   { body: '#f4a35f', core: '#ffe2bf', blush: '#e06a3a', leaf: '#4fa44c' }, // orange
@@ -1413,7 +1419,14 @@ export class Office3D extends window.Office {
     }
     const gltf =this.chars[p.h % this.chars.length];
     const obj = cloneSkinned(gltf.scene);
-    if (p.look) { try { this.dress(obj, p.look); } catch (e) { console.warn('outfit:', e); } }
+    // LIN's own sessions wear the virtual-lin outfit from its team.json
+    // (the default black suit made his seated legs read as two black sticks)
+    let look = p.look;
+    if (p.s && !p.s.residentOf && !p.s.subagent) {
+      look = LIN_LOOK;
+      for (const q of this.people.values()) if (q.s && q.s.residentOf === 'virtual-lin' && q.s.look) { look = q.s.look; break; }
+    }
+    if (look) { try { this.dress(obj, look); } catch (e) { console.warn('outfit:', e); } }
     obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     const box = new THREE.Box3().setFromObject(obj);
     const s = CHAR_HEIGHT * (p.s && p.s.subagent ? 0.8 : 1) / (box.max.y - box.min.y);
